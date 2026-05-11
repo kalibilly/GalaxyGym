@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Welcome, {{ user.login_id }}!</h1>
+
+        <div class="row mb-4">
+            <div class="col-md-2">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h6 class="card-title">Unpaid Invoices</h6>
+                        <p class="card-text display-5">{{ unpaid_invoices_count }}</p>
+                        <a href="{% url 'payments:invoice_list' %}?status=unpaid" class="btn btn-sm btn-outline-primary">View</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h6 class="card-title">Pending Balance</h6>
+                        <p class="card-text display-5">{{ pending_balance }}</p>
+                        <a href="{% url 'payments:invoice_list' %}" class="btn btn-sm btn-outline-primary">View</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h6 class="card-title">Overdue Invoices</h6>
+                        <p class="card-text display-5">{{ overdue_invoices }}</p>
+                        <a href="{% url 'payments:invoice_list' %}?status=overdue" class="btn btn-sm btn-outline-primary">View</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h6 class="card-title">Total Invoices</h6>
+                        <p class="card-text display-5">{{ total_invoices }}</p>
+                        <a href="{% url 'payments:invoice_list' %}" class="btn btn-sm btn-outline-primary">View</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h6 class="card-title">Attendance Today</h6>
+                        <p class="card-text display-5">{{ attendance_today }}</p>
+                        <a href="{% url 'attendance:attendance_list' %}?start_date={{ today }}&end_date={{ today }}" class="btn btn-sm btn-outline-primary">View</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h6 class="card-title">Collected This Month</h6>
+                        <p class="card-text display-5">{{ collected_this_month }}</p>
+                        <a href="{% url 'payments:payment_list' %}" class="btn btn-sm btn-outline-primary">View</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">Top Members by Open Invoices</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if top_members %}
+                            <div class="table-responsive">
+                                <table class="table table-sm mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Member</th>
+                                            <th>Open Invoices</th>
+                                            <th>Overdue</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for member in top_members %}
+                                            <tr>
+                                                <td>{{ member.full_name }}</td>
+                                                <td>{{ member.open_invoice_count }}</td>
+                                                <td>{{ member.overdue_invoice_count }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="mb-0">No members with open invoices this month.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Recent Activity</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">No recent activity yet.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Quick Actions</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled">
+                            <li><a href="{% url 'members:create' %}" class="btn btn-sm btn-link">Add New Member</a></li>
+                            <li><a href="{% url 'staffs:create' %}" class="btn btn-sm btn-link">Add New Staff</a></li>
+                            <li><a href="{% url 'memberships:plan_create' %}" class="btn btn-sm btn-link">Create Membership Plan</a></li>
+                            <li><a href="{% url 'payments:payment_create' %}" class="btn btn-sm btn-link">Record Payment</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

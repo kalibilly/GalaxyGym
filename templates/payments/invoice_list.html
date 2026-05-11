@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block title %}Invoices - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="h4 mb-0">Invoices</h1>
+        <p class="text-muted">View and manage billing records for members.</p>
+    </div>
+    <a href="{% url 'payments:invoice_create' %}" class="btn btn-primary">Create Invoice</a>
+</div>
+
+<form method="get" class="row gx-2 gy-3 mb-4">
+    <div class="col-sm-4">
+        <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Search invoice number or member...">
+    </div>
+    <div class="col-sm-3">
+        <select name="status" class="form-select">
+            <option value="">All Status</option>
+            <option value="unpaid" {% if status == 'unpaid' %}selected{% endif %}>Unpaid</option>
+            <option value="partial" {% if status == 'partial' %}selected{% endif %}>Partial</option>
+            <option value="paid" {% if status == 'paid' %}selected{% endif %}>Paid</option>
+            <option value="overdue" {% if status == 'overdue' %}selected{% endif %}>Overdue</option>
+        </select>
+    </div>
+    <div class="col-sm-2 d-grid">
+        <button class="btn btn-secondary">Filter</button>
+    </div>
+</form>
+
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th>Invoice</th>
+                <th>Member</th>
+                <th>Invoice Date</th>
+                <th>Due Date</th>
+                <th>Total</th>
+                <th>Balance</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for invoice in invoices %}
+                <tr>
+                    <td><a href="{% url 'payments:invoice_detail' invoice.pk %}">{{ invoice.invoice_no }}</a></td>
+                    <td>{{ invoice.member.full_name }}</td>
+                    <td>{{ invoice.invoice_date|date:'M d, Y' }}</td>
+                    <td>{{ invoice.due_date|date:'M d, Y' }}</td>
+                    <td>{{ invoice.total_amount }}</td>
+                    <td>{{ invoice.balance_amount }}</td>
+                    <td>
+                        <span class="badge bg-{{ 'warning' if invoice.status == 'partial' else 'success' if invoice.status == 'paid' else 'danger' if invoice.status == 'overdue' else 'secondary' }}">{{ invoice.get_status_display }}</span>
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'payments:invoice_update' invoice.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted">No invoices found.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if is_paginated %}
+<nav aria-label="Invoice pagination">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        {% endif %}
+        <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

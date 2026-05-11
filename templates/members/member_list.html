@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Members - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="h4 mb-0">Members</h1>
+        <p class="text-muted">Track membership profiles and assigned staff.</p>
+    </div>
+    <a href="{% url 'members:create' %}" class="btn btn-primary">Add Member</a>
+</div>
+
+<form method="get" class="row gx-2 gy-3 mb-4">
+    <div class="col-sm-4">
+        <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Search member ID, name, phone, email...">
+    </div>
+    <div class="col-sm-3">
+        <select name="status" class="form-select">
+            <option value="">All Statuses</option>
+            <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
+            <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
+            <option value="blacklisted" {% if status == 'blacklisted' %}selected{% endif %}>Blacklisted</option>
+        </select>
+    </div>
+    <div class="col-sm-3">
+        <select name="staff" class="form-select">
+            <option value="">Assigned Staff</option>
+            {% for staff in staff_members %}
+                <option value="{{ staff.id }}" {% if staff.id|stringformat:'s' == staff_id %}selected{% endif %}>{{ staff.full_name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-sm-2 d-grid">
+        <button class="btn btn-secondary">Filter</button>
+    </div>
+</form>
+
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th>Member ID</th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Assigned Staff</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for member in member_list %}
+                <tr>
+                    <td>{{ member.member_id }}</td>
+                    <td><a href="{% url 'members:detail' member.pk %}">{{ member.full_name }}</a></td>
+                    <td>{{ member.phone_number }}</td>
+                    <td>{{ member.assigned_staff.full_name if member.assigned_staff else '—' }}</td>
+                    <td>
+                        <span class="badge bg-{{ 'success' if member.status == 'active' else 'secondary' if member.status == 'inactive' else 'warning' }}">{{ member.get_status_display }}</span>
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'members:update' member.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">No members found.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if is_paginated %}
+<nav aria-label="Member pagination">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if staff_id %}staff={{ staff_id }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        {% endif %}
+        <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if staff_id %}staff={{ staff_id }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

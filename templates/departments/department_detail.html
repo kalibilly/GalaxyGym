@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Department Details - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h1 class="h4">{{ department.name }}</h1>
+                <p class="text-muted mb-0">{{ department.speciality|default:'No speciality specified.' }}</p>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5>Department Summary</h5>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Head Name</dt>
+                    <dd class="col-sm-8">{{ department.head_name|default:'—' }}</dd>
+                    <dt class="col-sm-4">Head Phone</dt>
+                    <dd class="col-sm-8">{{ department.head_phone_number|default:'—' }}</dd>
+                    <dt class="col-sm-4">Active Staff</dt>
+                    <dd class="col-sm-8">{{ department.number_of_staff }}</dd>
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">
+                        {% if department.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </dd>
+                    <dt class="col-sm-4">Created</dt>
+                    <dd class="col-sm-8">{{ department.created_at|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">Updated</dt>
+                    <dd class="col-sm-8">{{ department.updated_at|date:'M d, Y' }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <a href="{% url 'departments:update' department.pk %}" class="btn btn-primary">Edit Department</a>
+        <a href="{% url 'departments:list' %}" class="btn btn-link">Back to Departments</a>
+    </div>
+</div>
+{% endblock %}

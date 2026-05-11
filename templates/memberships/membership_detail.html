@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block title %}Membership Details - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h1 class="h4 mb-0">{{ membership.member.full_name }}</h1>
+                <p class="text-muted mb-0">{{ membership.plan.name }}</p>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5>Membership Summary</h5>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Member</dt>
+                    <dd class="col-sm-8">{{ membership.member.full_name }}</dd>
+                    <dt class="col-sm-4">Plan</dt>
+                    <dd class="col-sm-8">{{ membership.plan.name }}</dd>
+                    <dt class="col-sm-4">Start Date</dt>
+                    <dd class="col-sm-8">{{ membership.start_date|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">End Date</dt>
+                    <dd class="col-sm-8">{{ membership.end_date|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">Amount</dt>
+                    <dd class="col-sm-8">{{ membership.membership_amount }}</dd>
+                    <dt class="col-sm-4">Discount</dt>
+                    <dd class="col-sm-8">{{ membership.discount_amount }}</dd>
+                    <dt class="col-sm-4">Final Amount</dt>
+                    <dd class="col-sm-8">{{ membership.final_amount }}</dd>
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">{{ membership.get_status_display }}</dd>
+                    <dt class="col-sm-4">Renewed From</dt>
+                    <dd class="col-sm-8">{{ membership.renewed_from if membership.renewed_from else '—' }}</dd>
+                    <dt class="col-sm-4">Remarks</dt>
+                    <dd class="col-sm-8">{{ membership.remarks|linebreaksbr|default:'No remarks.' }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'memberships:update' membership.pk %}" class="btn btn-primary">Edit Membership</a>
+            <a href="{% url 'memberships:list' %}" class="btn btn-link">Back to memberships</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

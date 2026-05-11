@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ plan.name }} - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h1 class="h4">{{ plan.name }}</h1>
+                <p class="text-muted mb-3">{{ plan.description|linebreaksbr|default:'No description provided.' }}</p>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Duration</dt>
+                    <dd class="col-sm-8">{{ plan.duration_days }} days</dd>
+                    <dt class="col-sm-4">Price</dt>
+                    <dd class="col-sm-8">{{ plan.price }}</dd>
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">
+                        {% if plan.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+        <a href="{% url 'memberships:plan_update' plan.pk %}" class="btn btn-primary">Edit Plan</a>
+        <a href="{% url 'memberships:plan_list' %}" class="btn btn-link">Back to plans</a>
+    </div>
+</div>
+{% endblock %}

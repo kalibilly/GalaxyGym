@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}Attendance Detail - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h1 class="h4">Attendance Report</h1>
+                <p class="text-muted mb-0">{{ attendance.get_person_type_display }} attendance entry.</p>
+            </div>
+        </div>
+        <div class="card mb-3">
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Date</dt>
+                    <dd class="col-sm-8">{{ attendance.date|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">Person</dt>
+                    <dd class="col-sm-8">
+                        {% if attendance.person_type == 'member' %}
+                            {{ attendance.member.full_name }}
+                        {% else %}
+                            {{ attendance.staff.full_name }}
+                        {% endif %}
+                    </dd>
+                    <dt class="col-sm-4">Check In</dt>
+                    <dd class="col-sm-8">{{ attendance.check_in_time|date:'M d, Y H:i' }}</dd>
+                    <dt class="col-sm-4">Check Out</dt>
+                    <dd class="col-sm-8">{{ attendance.check_out_time|date:'M d, Y H:i'|default:'—' }}</dd>
+                    <dt class="col-sm-4">Source</dt>
+                    <dd class="col-sm-8">{{ attendance.get_source_display }}</dd>
+                    <dt class="col-sm-4">Verification</dt>
+                    <dd class="col-sm-8">{{ attendance.get_verification_mode_display }}</dd>
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">{{ attendance.get_status_display }}</dd>
+                    <dt class="col-sm-4">Device ID</dt>
+                    <dd class="col-sm-8">{{ attendance.device_id|default:'—' }}</dd>
+                    <dt class="col-sm-4">Remarks</dt>
+                    <dd class="col-sm-8">{{ attendance.remarks|linebreaksbr|default:'No remarks.' }}</dd>
+                </dl>
+            </div>
+        </div>
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'attendance:attendance_update' attendance.pk %}" class="btn btn-primary">Edit Attendance</a>
+            <a href="{% url 'attendance:attendance_list' %}" class="btn btn-link">Back to attendance</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

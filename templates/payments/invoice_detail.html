@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}Invoice {{ invoice.invoice_no }} - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h1 class="h4">Invoice {{ invoice.invoice_no }}</h1>
+                <p class="text-muted mb-2">{{ invoice.member.full_name }}</p>
+                <p class="mb-0">{{ invoice.remarks|linebreaksbr|default:'No remarks provided.' }}</p>
+            </div>
+        </div>
+        <div class="card mb-3">
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Invoice Date</dt>
+                    <dd class="col-sm-8">{{ invoice.invoice_date|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">Due Date</dt>
+                    <dd class="col-sm-8">{{ invoice.due_date|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">Subtotal</dt>
+                    <dd class="col-sm-8">{{ invoice.subtotal }}</dd>
+                    <dt class="col-sm-4">Discount</dt>
+                    <dd class="col-sm-8">{{ invoice.discount_amount }}</dd>
+                    <dt class="col-sm-4">Tax</dt>
+                    <dd class="col-sm-8">{{ invoice.tax_amount }}</dd>
+                    <dt class="col-sm-4">Total</dt>
+                    <dd class="col-sm-8">{{ invoice.total_amount }}</dd>
+                    <dt class="col-sm-4">Paid</dt>
+                    <dd class="col-sm-8">{{ invoice.paid_amount }}</dd>
+                    <dt class="col-sm-4">Balance</dt>
+                    <dd class="col-sm-8">{{ invoice.balance_amount }}</dd>
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">{{ invoice.get_status_display }}</dd>
+                </dl>
+            </div>
+        </div>
+        <div class="card mb-3">
+            <div class="card-header">Payments</div>
+            <div class="card-body">
+                {% if invoice.payments.exists %}
+                    <ul class="list-group list-group-flush">
+                        {% for payment in invoice.payments.all %}
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <strong>{{ payment.amount_paid }}</strong>
+                                        <div class="small text-muted">{{ payment.payment_date|date:'M d, Y' }} via {{ payment.get_payment_mode_display }}</div>
+                                    </div>
+                                    <div class="text-end">
+                                        <a href="{% url 'payments:payment_detail' payment.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+                                    </div>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No payments recorded for this invoice.</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'payments:invoice_update' invoice.pk %}" class="btn btn-primary">Edit Invoice</a>
+            <a href="{% url 'payments:payment_create' %}?invoice={{ invoice.pk }}" class="btn btn-outline-primary">Record Payment</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

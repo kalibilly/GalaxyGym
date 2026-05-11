@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+
+{% block title %}Staff Directory - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="h4 mb-0">Staff Directory</h1>
+        <p class="text-muted">Manage gym staff members and department assignments.</p>
+    </div>
+    <a href="{% url 'staffs:create' %}" class="btn btn-primary">Add Staff</a>
+</div>
+
+<form method="get" class="row gx-2 gy-3 mb-4">
+    <div class="col-sm-4">
+        <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Search name, ID, phone, email...">
+    </div>
+    <div class="col-sm-3">
+        <select name="department" class="form-select">
+            <option value="">All Departments</option>
+            {% for department in departments %}
+                <option value="{{ department.id }}" {% if department.id|stringformat:'s' == department_id %}selected{% endif %}>
+                    {{ department.name }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-sm-2">
+        <select name="active" class="form-select">
+            <option value="">All Status</option>
+            <option value="active" {% if active == 'active' %}selected{% endif %}>Active</option>
+            <option value="inactive" {% if active == 'inactive' %}selected{% endif %}>Inactive</option>
+        </select>
+    </div>
+    <div class="col-sm-3 d-grid">
+        <button class="btn btn-secondary">Filter</button>
+    </div>
+</form>
+
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th>Staff ID</th>
+                <th>Name</th>
+                <th>Department</th>
+                <th>Designation</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for staff in staff_list %}
+                <tr>
+                    <td>{{ staff.staff_id }}</td>
+                    <td>
+                        <a href="{% url 'staffs:detail' staff.pk %}">{{ staff.full_name }}</a>
+                    </td>
+                    <td>{{ staff.department.name if staff.department else '—' }}</td>
+                    <td>{{ staff.designation }}</td>
+                    <td>
+                        {% if staff.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'staffs:update' staff.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">No staff members found.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if is_paginated %}
+<nav aria-label="Staff pagination">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if department_id %}department={{ department_id }}&{% endif %}{% if active %}active={{ active }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        {% endif %}
+        <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if department_id %}department={{ department_id }}&{% endif %}{% if active %}active={{ active }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ staff.full_name }} - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h1 class="h4">{{ staff.full_name }}</h1>
+                <p class="text-muted mb-0">{{ staff.designation|default:'Staff member' }}</p>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5>Profile Details</h5>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Staff ID</dt>
+                    <dd class="col-sm-8">{{ staff.staff_id }}</dd>
+                    <dt class="col-sm-4">Email</dt>
+                    <dd class="col-sm-8">{{ staff.email|default:'—' }}</dd>
+                    <dt class="col-sm-4">Phone</dt>
+                    <dd class="col-sm-8">{{ staff.phone_number }}</dd>
+                    <dt class="col-sm-4">Department</dt>
+                    <dd class="col-sm-8">{{ staff.department.name if staff.department else '—' }}</dd>
+                    <dt class="col-sm-4">Gender</dt>
+                    <dd class="col-sm-8">{{ staff.get_gender_display|default:'—' }}</dd>
+                    <dt class="col-sm-4">Joined</dt>
+                    <dd class="col-sm-8">{{ staff.date_of_joining|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">
+                        {% if staff.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </dd>
+                    <dt class="col-sm-4">Notes</dt>
+                    <dd class="col-sm-8">{{ staff.notes|linebreaksbr|default:'No notes available.' }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">Recent Attendance</div>
+            <div class="card-body">
+                {% if attendance_history %}
+                    <ul class="list-group list-group-flush">
+                        {% for attendance in attendance_history %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    {{ attendance.date|date:'M d, Y' }}
+                                    <div class="small text-muted">{{ attendance.check_in_time|date:'H:i' }}</div>
+                                </div>
+                                <span class="badge bg-{{ 'success' if attendance.status == 'present' else 'warning' if attendance.status == 'late' else 'secondary' }}">{{ attendance.get_status_display }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No attendance history yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <a href="{% url 'staffs:update' staff.pk %}" class="btn btn-primary">Edit Staff</a>
+        <a href="{% url 'staffs:list' %}" class="btn btn-link">Back to directory</a>
+    </div>
+
+    <div class="col-lg-4">
+        {% if staff.photo %}
+            <div class="card mb-3">
+                <img src="{{ staff.photo.url }}" class="card-img-top" alt="{{ staff.full_name }}">
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

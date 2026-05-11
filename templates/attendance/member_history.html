@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ member.full_name }} Attendance History - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h1 class="h4">{{ member.full_name }} Attendance History</h1>
+                <p class="text-muted">Recent session logs for this member.</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                {% if attendance_list %}
+                    <div class="list-group">
+                        {% for attendance in attendance_list %}
+                            <a href="{% url 'attendance:attendance_detail' attendance.pk %}" class="list-group-item list-group-item-action">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <strong>{{ attendance.date|date:'M d, Y' }}</strong>
+                                        <div class="small text-muted">Checked in at {{ attendance.check_in_time|date:'H:i' }}</div>
+                                    </div>
+                                    <span class="badge bg-{{ 'success' if attendance.status == 'present' else 'warning' if attendance.status == 'late' else 'secondary' }}">{{ attendance.get_status_display }}</span>
+                                </div>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted">No attendance records available.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

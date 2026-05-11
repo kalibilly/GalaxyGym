@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ member.full_name }} - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h1 class="h4">{{ member.full_name }}</h1>
+                <p class="text-muted mb-0">{{ member.member_id }}</p>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5>Member Details</h5>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Phone</dt>
+                    <dd class="col-sm-8">{{ member.phone_number }}</dd>
+                    <dt class="col-sm-4">Email</dt>
+                    <dd class="col-sm-8">{{ member.email|default:'—' }}</dd>
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">{{ member.get_status_display }}</dd>
+                    <dt class="col-sm-4">Joined</dt>
+                    <dd class="col-sm-8">{{ member.date_of_joining|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">Assigned Staff</dt>
+                    <dd class="col-sm-8">{{ member.assigned_staff.full_name if member.assigned_staff else '—' }}</dd>
+                    <dt class="col-sm-4">Emergency Contact</dt>
+                    <dd class="col-sm-8">{{ member.emergency_contact_name|default:'—' }} — {{ member.emergency_contact_phone|default:'—' }}</dd>
+                    <dt class="col-sm-4">Address</dt>
+                    <dd class="col-sm-8">{{ member.address|linebreaksbr|default:'No address provided.' }}</dd>
+                    <dt class="col-sm-4">Notes</dt>
+                    <dd class="col-sm-8">{{ member.notes|linebreaksbr|default:'No notes available.' }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5>Membership Summary</h5>
+                {% if active_membership %}
+                    <p class="mb-2">Current plan: <strong>{{ active_membership.plan.name }}</strong></p>
+                    <p class="mb-2">Status: <strong>{{ active_membership.get_status_display }}</strong></p>
+                    <p class="mb-2">Valid: {{ active_membership.start_date|date:'M d, Y' }} — {{ active_membership.end_date|date:'M d, Y' }}</p>
+                {% else %}
+                    <p class="text-muted">No active membership found.</p>
+                {% endif %}
+
+                {% if recent_memberships %}
+                    <h6 class="mt-3">Recent Memberships</h6>
+                    <ul class="list-group list-group-flush">
+                        {% for membership in recent_memberships %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center p-2">
+                                <div>
+                                    <strong>{{ membership.plan.name }}</strong>
+                                    <div class="small text-muted">{{ membership.start_date|date:'M d, Y' }} — {{ membership.end_date|date:'M d, Y' }}</div>
+                                </div>
+                                <span class="badge bg-{{ 'success' if membership.status == 'active' else 'warning' if membership.status == 'expiring_soon' else 'secondary' }}">{{ membership.get_status_display }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6>Open Balance</h6>
+                        <p class="display-6 mb-0">{{ outstanding_balance }}</p>
+                        {% if latest_invoice %}
+                            <p class="small text-muted mb-0">Latest invoice: <a href="{% url 'payments:invoice_detail' latest_invoice.pk %}">{{ latest_invoice.invoice_no }}</a></p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6>Recent Payments</h6>
+                        {% if recent_payments %}
+                            <ul class="list-unstyled mb-0">
+                                {% for payment in recent_payments %}
+                                    <li>{{ payment.amount_paid }} on {{ payment.payment_date|date:'M d' }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted mb-0">No recent payments.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">Recent Attendance</div>
+            <div class="card-body">
+                {% if attendance_history %}
+                    <ul class="list-group list-group-flush">
+                        {% for attendance in attendance_history %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    {{ attendance.date|date:'M d, Y' }}
+                                    <div class="small text-muted">{{ attendance.check_in_time|date:'H:i' }}</div>
+                                </div>
+                                <span class="badge bg-{{ 'success' if attendance.status == 'present' else 'warning' if attendance.status == 'late' else 'secondary' }}">{{ attendance.get_status_display }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No attendance history yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'members:update' member.pk %}" class="btn btn-primary">Edit Member</a>
+            <a href="{% url 'members:list' %}" class="btn btn-link">Back to members</a>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        {% if member.photo %}
+            <div class="card mb-3">
+                <img src="{{ member.photo.url }}" class="card-img-top" alt="{{ member.full_name }}">
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

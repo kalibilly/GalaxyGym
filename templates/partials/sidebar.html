@@ -1,0 +1,35 @@
+<aside class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+    <div class="position-sticky pt-3">
+        <ul class="nav flex-column">
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a>
+            </li>
+            {% if user.role == 'owner' or user.is_staff %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'members:list' %}">Members</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'staffs:list' %}">Staff</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'departments:list' %}">Departments</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'memberships:list' %}">Memberships</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'payments:payment_list' %}">Payments</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'attendance:attendance_list' %}">Attendance</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'notifications:list' %}">Notifications</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'admin:index' %}">Admin Panel</a>
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+</aside>
