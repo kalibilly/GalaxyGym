@@ -11,20 +11,22 @@
     {% include "partials/navbar.html" %}
     
     <div class="container-fluid flex-grow-1" style="margin-top: 60px;">
+        {% block content %}
         <div class="row h-100">
             {% if user.is_authenticated %}
                 {% include "partials/sidebar.html" %}
                 <main class="col-md-9 col-lg-10 px-4 py-4">
                     {% include "partials/messages.html" %}
-                    {% block content %}{% endblock %}
+                    {% block authenticated_content %}{% endblock %}
                 </main>
             {% else %}
                 <main class="col-12">
                     {% include "partials/messages.html" %}
-                    {% block content %}{% endblock %}
+                    {% block unauthenticated_content %}{% endblock %}
                 </main>
             {% endif %}
         </div>
+        {% endblock %}
     </div>
 
     {% include "partials/footer.html" %}
