@@ -16,7 +16,9 @@ if not SECRET_KEY:
 
 DEBUG = os.environ.get('DEBUG', 'True').lower() != 'false'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = [
+    'galaxy-gym.onrender.com',
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
