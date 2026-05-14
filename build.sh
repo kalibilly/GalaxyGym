@@ -6,8 +6,6 @@ python manage.py collectstatic --noinput
 
 python manage.py createsuperuser --noinput || true
 
-python manage.py makemigrations --noinput
-
 python manage.py migrate --noinput
 
 if [ "$DJANGO_SUPERUSER_PASSWORD" ] && [ "$DJANGO_SUPERUSER_USERNAME" ] && [ "$DJANGO_SUPERUSER_EMAIL" ]; then
