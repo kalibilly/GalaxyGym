@@ -14,7 +14,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', '')
 if not SECRET_KEY:
     raise Exception("SECRET_KEY is missing. Set it in environment variables.")
 
-DEBUG = os.environ.get('DEBUG', 'True').lower() != 'false'
+DEBUG = False
 
 ALLOWED_HOSTS = [
     'galaxy-gym.onrender.com',
