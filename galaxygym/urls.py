@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic.base import RedirectView
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -14,7 +15,7 @@ urlpatterns = [
     path('payments/', include('payments.urls')),
     path('attendance/', include('attendance.urls')),
     path('notifications/', include('notifications.urls')),
-    path('', lambda request: __import__('django.shortcuts', fromlist=['redirect']).redirect('dashboard')),
+    path('', RedirectView.as_view(pattern_name='dashboard', permanent=False)),
 ]
 
 if settings.DEBUG:
