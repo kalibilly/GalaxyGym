@@ -116,3 +116,97 @@ class GymIssuedID(models.Model):
 
     def __str__(self):
         return f'{self.code} ({self.role})'
+
+
+class SignupRequest(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_APPROVED = 'approved'
+    STATUS_REJECTED = 'rejected'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending Review'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_REJECTED, 'Rejected'),
+    ]
+
+    requested_role = models.CharField(max_length=10, choices=UserAccount.ROLE_CHOICES)
+    unique_id = models.CharField(max_length=32)
+    full_name = models.CharField(max_length=120)
+    phone_number = models.CharField(max_length=20, validators=[phone_regex])
+    email = models.EmailField(blank=True, null=True)
+    desired_login_id = models.CharField(max_length=32, unique=True)
+    password_hash = models.CharField(max_length=255)
+    
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='reviewed_signup_requests',
+    )
+    rejection_reason = models.TextField(blank=True, null=True)
+    whatsapp_notified = models.BooleanField(default=False)
+    notes = models.TextField(blank=True, null=True)
+    
+    created_user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name='signup_request',
+    )
+
+    class Meta:
+        verbose_name = 'Signup Request'
+        verbose_name_plural = 'Signup Requests'
+        ordering = ['-submitted_at']
+        unique_together = ('desired_login_id', 'phone_number')
+
+    def __str__(self):
+        return f'{self.full_name} ({self.requested_role}) - {self.status}'
+
+    def approve(self, reviewed_by):
+        """
+        Approve the signup request and create the user account.
+        """
+        if self.status != self.STATUS_PENDING:
+            raise ValueError(f'Can only approve pending requests. Current status: {self.status}')
+
+        if UserAccount.objects.filter(login_id=self.desired_login_id).exists():
+            raise ValueError(f'User with login_id {self.desired_login_id} already exists.')
+
+        user = UserAccount.objects.create_user(
+            login_id=self.desired_login_id,
+            email=self.email,
+            phone_number=self.phone_number,
+            full_name=self.full_name,
+            role=self.requested_role,
+            is_active=True,
+            is_verified=True,
+        )
+        user.password = self.password_hash
+        user.save()
+
+        self.status = self.STATUS_APPROVED
+        self.reviewed_at = timezone.now()
+        self.reviewed_by = reviewed_by
+        self.created_user = user
+        self.save()
+
+        return user
+
+    def reject(self, reviewed_by, reason=''):
+        """
+        Reject the signup request.
+        """
+        if self.status != self.STATUS_PENDING:
+            raise ValueError(f'Can only reject pending requests. Current status: {self.status}')
+
+        self.status = self.STATUS_REJECTED
+        self.reviewed_at = timezone.now()
+        self.reviewed_by = reviewed_by
+        self.rejection_reason = reason
+        self.save()
