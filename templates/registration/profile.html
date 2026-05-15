@@ -3,33 +3,49 @@
 {% block title %}Profile - Galaxy Gym{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-8">
-        <h1>Your Profile</h1>
-        <div class="card">
+<div class="row justify-content-center py-5">
+    <div class="col-xl-8">
+        <h1 class="mb-4">Your Profile</h1>
+        {% include 'partials/messages.html' %}
+        <div class="card bg-secondary text-white border-0 shadow-sm">
             <div class="card-body">
-                <table class="table">
-                    <tr>
-                        <th>Login ID</th>
-                        <td>{{ user.login_id }}</td>
-                    </tr>
-                    <tr>
-                        <th>Email</th>
-                        <td>{{ user.email }}</td>
-                    </tr>
-                    <tr>
-                        <th>Phone</th>
-                        <td>{{ user.phone_number }}</td>
-                    </tr>
-                    <tr>
-                        <th>Role</th>
-                        <td>{{ user.get_role_display }}</td>
-                    </tr>
-                    <tr>
-                        <th>Date Joined</th>
-                        <td>{{ user.date_joined }}</td>
-                    </tr>
-                </table>
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Login ID</label>
+                            <input class="form-control" type="text" value="{{ user.login_id }}" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Role</label>
+                            <input class="form-control" type="text" value="{{ user.get_role_display }}" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Full Name</label>
+                            {{ form.full_name }}
+                            {% if form.full_name.errors %}
+                                <div class="invalid-feedback d-block">{{ form.full_name.errors|join:' ' }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            {{ form.email }}
+                            {% if form.email.errors %}
+                                <div class="invalid-feedback d-block">{{ form.email.errors|join:' ' }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone Number</label>
+                            {{ form.phone_number }}
+                            {% if form.phone_number.errors %}
+                                <div class="invalid-feedback d-block">{{ form.phone_number.errors|join:' ' }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary">Update Profile</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
