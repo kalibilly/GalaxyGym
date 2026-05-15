@@ -1,0 +1,78 @@
+body {
+    background-color: #080e1c;
+    color: #e9ecef;
+}
+
+.navbar, .card-dark, .sidebar {
+    background-color: #0d1323 !important;
+    color: #f8f9fa !important;
+}
+
+.card {
+    background-color: #111a32;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.card .card-header, .card .card-footer {
+    background-color: #0d1323;
+    border-color: rgba(255,255,255,0.08);
+}
+
+.btn-primary {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.btn-outline-light {
+    color: #f8f9fa;
+    border-color: rgba(248,249,250,0.4);
+}
+
+.btn-outline-light:hover {
+    color: #fff;
+    background-color: rgba(248,249,250,0.08);
+}
+
+.home-hero {
+    min-height: 70vh;
+    background-size: cover;
+    background-position: center;
+}
+
+.auth-page {
+    min-height: calc(100vh - 70px);
+}
+
+.form-control, .form-select {
+    background-color: #0d1323;
+    color: #f8f9fa;
+    border-color: rgba(255,255,255,0.12);
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: #0d1323;
+    color: #f8f9fa;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.table {
+    color: #f8f9fa;
+}
+
+.table th, .table td {
+    border-color: rgba(255,255,255,0.08);
+}
+
+.bg-dark, .bg-secondary, .bg-body-secondary {
+    background-color: #0d1323 !important;
+}
+
+.text-muted {
+    color: rgba(248,249,250,0.65) !important;
+}
+
+.footer-dark {
+    background-color: #0b101e;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
