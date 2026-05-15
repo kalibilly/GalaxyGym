@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Request Submitted - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center py-5" style="min-height: 60vh;">
+    <div class="col-xl-5 col-lg-6">
+        <div class="card card-dark shadow-lg border-success">
+            <div class="card-body p-5 text-center">
+                <div class="mb-4">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                </div>
+                <h1 class="h3 text-white mb-3">Request Submitted Successfully!</h1>
+                
+                <div class="alert alert-info" role="alert">
+                    <p class="mb-0">Your signup request has been submitted to the gym management team.</p>
+                </div>
+
+                <div class="bg-secondary rounded p-3 mb-4">
+                    <h5 class="text-white mb-3">What happens next?</h5>
+                    <ul class="list-unstyled text-muted small">
+                        <li class="mb-2">
+                            <i class="bi bi-check-lg text-success"></i>
+                            <strong>Verification:</strong> The gym will verify your details against their records (usually within 1-2 business days)
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-lg text-success"></i>
+                            <strong>WhatsApp Notification:</strong> You'll receive a WhatsApp message confirming approval or requesting more information
+                        </li>
+                        <li>
+                            <i class="bi bi-check-lg text-success"></i>
+                            <strong>Login:</strong> Once approved, you can log in with your desired login ID
+                        </li>
+                    </ul>
+                </div>
+
+                <p class="text-muted mb-4">
+                    Make sure we have the correct phone number so we can reach you. You provided: <strong>{{ request.session.signup_phone }}</strong>
+                </p>
+
+                <a href="{% url 'home' %}" class="btn btn-primary">Back to Home</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
