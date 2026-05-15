@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Owner Dashboard - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="h3 text-white">Welcome, {{ user.full_name|default:user.login_id }}!</h1>
+            <p class="text-muted">Owner Dashboard - Gym Management</p>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <a href="{% url 'admin:index' %}" class="btn btn-outline-warning" target="_blank">Admin Panel</a>
+            <a href="{% url 'profile' %}" class="btn btn-outline-primary">Edit Profile</a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card card-dark">
+                <div class="card-header bg-success">
+                    <h5 class="mb-0 text-white">Owner Information</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row text-sm">
+                        <dt class="col-sm-6">Name:</dt>
+                        <dd class="col-sm-6">{{ user.full_name|default:user.login_id }}</dd>
+                        
+                        <dt class="col-sm-6">Login ID:</dt>
+                        <dd class="col-sm-6">{{ user.login_id }}</dd>
+                        
+                        <dt class="col-sm-6">Phone:</dt>
+                        <dd class="col-sm-6">{{ user.phone_number|default:"N/A" }}</dd>
+                        
+                        <dt class="col-sm-6">Email:</dt>
+                        <dd class="col-sm-6">{{ user.email|default:"N/A" }}</dd>
+                        
+                        <dt class="col-sm-6">Role:</dt>
+                        <dd class="col-sm-6">
+                            <span class="badge bg-success">{{ user.get_role_display }}</span>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card card-dark">
+                <div class="card-header bg-info">
+                    <h5 class="mb-0 text-white">Admin Functions</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">Manage gym operations and users:</p>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <button class="btn btn-outline-light w-100" disabled>Member Analytics</button>
+                        </div>
+                        <div class="col-md-6">
+                            <button class="btn btn-outline-light w-100" disabled>Revenue Reports</button>
+                        </div>
+                        <div class="col-md-6">
+                            <button class="btn btn-outline-light w-100" disabled>Staff Management</button>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="{% url 'admin:index' %}" class="btn btn-primary w-100" target="_blank">Django Admin</a>
+                        </div>
+                        <div class="col-md-6">
+                            <button class="btn btn-outline-light w-100" disabled>Gym Settings</button>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="{% url 'profile' %}" class="btn btn-outline-light w-100">Update Profile</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-2">
+        <div class="col-12">
+            <div class="card card-dark">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0 text-dark"><strong>Important Admin Tasks</strong></h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush bg-secondary">
+                        <li class="list-group-item bg-secondary text-muted">
+                            <strong>Signup Requests:</strong> Review and approve pending member signup requests in Django Admin → Accounts → Signup Requests
+                        </li>
+                        <li class="list-group-item bg-secondary text-muted">
+                            <strong>Manage Users:</strong> Create, edit, and deactivate user accounts in Django Admin → Accounts → User Accounts
+                        </li>
+                        <li class="list-group-item bg-secondary text-muted">
+                            <strong>Gym IDs:</strong> Add and manage gym-issued ID codes for member verification in Django Admin → Accounts → Gym Issued IDs
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
