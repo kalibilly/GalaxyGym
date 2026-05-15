@@ -1,0 +1,45 @@
+{% extends "admin/base_site.html" %}
+{% load admin_urls static %}
+
+{% block title %}Reject Signup Requests | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block content %}
+<h1>Reject Signup Requests</h1>
+
+<form method="post" class="module">
+    {% csrf_token %}
+    
+    <div class="form-group">
+        <label>Requests to reject:</label>
+        <ul>
+            {% for request_obj in requests %}
+                <li>
+                    <strong>{{ request_obj.full_name }}</strong> 
+                    ({{ request_obj.get_requested_role_display }}, {{ request_obj.phone_number }})
+                </li>
+            {% empty %}
+                <li class="alert alert-warning">No requests selected</li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="form-group">
+        <label for="id_rejection_reason">Rejection Reason: <span class="required">*</span></label>
+        <textarea name="rejection_reason" id="id_rejection_reason" class="vLargeTextField" required 
+                  placeholder="Provide a clear reason for rejection. This will be sent to the user via WhatsApp."></textarea>
+        <p class="help">Users will see this message on WhatsApp, so keep it professional and helpful.</p>
+    </div>
+
+    <div class="submit-row">
+        <a href="{% url 'admin:accounts_signuprequest_changelist' %}" class="button">Cancel</a>
+        <button type="submit" class="button default" name="submit" value="Reject">Reject Selected</button>
+    </div>
+</form>
+
+<style>
+    textarea {
+        width: 100%;
+        min-height: 150px;
+    }
+</style>
+{% endblock %}
