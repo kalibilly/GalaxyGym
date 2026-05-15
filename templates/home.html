@@ -1,0 +1,80 @@
+{% load static %}
+{% extends "base.html" %}
+
+{% block title %}Welcome to Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="home-hero text-white d-flex align-items-center" style="background-image: linear-gradient(rgba(0, 0, 0, 0.65), rgba(8, 12, 27, 0.75)), url('{% static 'images/home-hero.jpg' %}');">
+    <div class="container py-6">
+        <div class="row justify-content-center">
+            <div class="col-lg-7 text-center">
+                <h1 class="display-4 fw-bold">Galaxy Gym</h1>
+                <p class="lead text-light opacity-85 mb-4">Strength, speed, and championship-ready performance for every member, staff, and owner.</p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{% url 'login' %}" class="btn btn-lg btn-primary">Login</a>
+                    <a href="{% url 'signup' %}" class="btn btn-lg btn-outline-light">Sign Up</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container py-5">
+    <div class="row gy-4">
+        <div class="col-lg-4">
+            <div class="card card-dark h-100">
+                <div class="card-body">
+                    <h3 class="h5 text-white">Member Access</h3>
+                    <p class="text-muted">Track your membership, complete payments, and register for gym events from your personal dashboard.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card card-dark h-100">
+                <div class="card-body">
+                    <h3 class="h5 text-white">Staff Portal</h3>
+                    <p class="text-muted">View your assigned shifts, manage attendance, and stay connected to gym operations.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card card-dark h-100">
+                <div class="card-body">
+                    <h3 class="h5 text-white">Owner Insights</h3>
+                    <p class="text-muted">Monitor membership status, payments, attendance, and reports all in one secure dashboard.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="py-5">
+        <h2 class="h3 text-white mb-4">Latest Highlights</h2>
+        <div class="row gy-4">
+            <div class="col-md-4">
+                <div class="card card-dark h-100">
+                    <div class="card-body">
+                        <h5 class="card-title text-white">Summer Strength Challenge</h5>
+                        <p class="card-text text-muted">Register now to compete in the 30-day strength and conditioning championship.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-dark h-100">
+                    <div class="card-body">
+                        <h5 class="card-title text-white">New Training Studio</h5>
+                        <p class="card-text text-muted">Our newest facility is now open with dedicated classes and premium equipment.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-dark h-100">
+                    <div class="card-body">
+                        <h5 class="card-title text-white">Membership Specials</h5>
+                        <p class="card-text text-muted">Limited-time membership bundles are available for all new signups.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
