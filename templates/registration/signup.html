@@ -1,0 +1,94 @@
+{% load static %}
+{% extends "base.html" %}
+
+{% block title %}Sign Up - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center auth-page py-5" style="background-image: linear-gradient(rgba(10, 14, 30, 0.88), rgba(10, 14, 30, 0.88)), url('{% static 'images/auth-bg.jpg' %}'); background-size: cover; background-position: center; min-height: 85vh;">
+    <div class="col-xl-6 col-lg-8">
+        <div class="card card-dark shadow-lg">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                    <h1 class="h3 text-white">Create Your Account</h1>
+                    <p class="text-muted">Use your gym-issued ID and selected role to register securely.</p>
+                </div>
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="row gy-3">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Gym Issued ID</label>
+                            {{ form.gym_id }}
+                            {% if form.gym_id.errors %}
+                                <div class="invalid-feedback d-block">{{ form.gym_id.errors|join:' ' }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Account Type</label>
+                            {{ form.role }}
+                            {% if form.role.errors %}
+                                <div class="invalid-feedback d-block">{{ form.role.errors|join:' ' }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Login ID</label>
+                            {{ form.login_id }}
+                            {% if form.login_id.errors %}
+                                <div class="invalid-feedback d-block">{{ form.login_id.errors|join:' ' }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Full Name</label>
+                            {{ form.full_name }}
+                            {% if form.full_name.errors %}
+                                <div class="invalid-feedback d-block">{{ form.full_name.errors|join:' ' }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Phone Number</label>
+                            {{ form.phone_number }}
+                            {% if form.phone_number.errors %}
+                                <div class="invalid-feedback d-block">{{ form.phone_number.errors|join:' ' }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Email (optional)</label>
+                            {{ form.email }}
+                            {% if form.email.errors %}
+                                <div class="invalid-feedback d-block">{{ form.email.errors|join:' ' }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Password</label>
+                            {{ form.password1 }}
+                            {% if form.password1.errors %}
+                                <div class="invalid-feedback d-block">{{ form.password1.errors|join:' ' }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Confirm Password</label>
+                            {{ form.password2 }}
+                            {% if form.password2.errors %}
+                                <div class="invalid-feedback d-block">{{ form.password2.errors|join:' ' }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">Create Account</button>
+                    </div>
+                </form>
+                <div class="text-center text-muted mt-4">
+                    Already have an account? <a class="text-white" href="{% url 'login' %}">Login here</a>.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
