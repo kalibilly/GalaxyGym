@@ -7,6 +7,29 @@ from accounts.models import UserAccount
 from .services import get_dashboard_metrics
 
 
+class HomeView(TemplateView):
+    template_name = 'home.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update({
+            'thumbnail': 'Thumbnail.jpeg',
+            'images': [
+                'image1.jpeg',
+                'image2.jpeg',
+                'image3.jpeg',
+                'image4.jpeg',
+                'image5.jpeg',
+                'image6.jpeg',
+                'image7.jpeg',
+                'image8.jpeg',
+                'image9.jpeg',
+                'image10.jpeg',
+            ],
+        })
+        return context
+
+
 class DashboardHomeView(LoginRequiredMixin, TemplateView):
     """
     Main dashboard view that routes to role-specific dashboards.
