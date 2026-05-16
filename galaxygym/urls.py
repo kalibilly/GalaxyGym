@@ -1,8 +1,9 @@
 from django.contrib import admin
 from django.urls import path, include
-from django.views.generic.base import TemplateView
 from django.conf import settings
 from django.conf.urls.static import static
+
+from core.views import HomeView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -15,7 +16,7 @@ urlpatterns = [
     path('payments/', include('payments.urls')),
     path('attendance/', include('attendance.urls')),
     path('notifications/', include('notifications.urls')),
-    path('', TemplateView.as_view(template_name='home.html'), name='home'),
+    path('', HomeView.as_view(), name='home'),
 ]
 
 if settings.DEBUG:
