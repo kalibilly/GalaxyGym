@@ -10,8 +10,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Production flag - set PRODUCTION=True or ENVIRONMENT=production in .env
 IS_PRODUCTION = config('PRODUCTION', default=False, cast=bool) or config('ENVIRONMENT', default='development').lower() == 'production'
 
-SECRET_KEY = os.environ.get('SECRET_KEY', '')
-if not SECRET_KEY:
+SECRET_KEY = os.environ.get('SECRET_KEY') or config('SECRET_KEY', default='django-insecure-change-me-in-development')
+if IS_PRODUCTION and not SECRET_KEY:
     raise Exception("SECRET_KEY is missing. Set it in environment variables.")
 
 DEBUG = False
@@ -121,6 +121,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.UserAccount'
+AUTHENTICATION_BACKENDS = ['django.contrib.auth.backends.ModelBackend']
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
