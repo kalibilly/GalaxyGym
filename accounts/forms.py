@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserChangeForm, UserCreationForm
 from django.contrib.auth.hashers import make_password
 
-from .models import GymIssuedID, SignupRequest, UserAccount
+from .models import SignupRequest, UserAccount
 
 
 class LoginForm(AuthenticationForm):
@@ -88,13 +88,9 @@ class SignupRequestForm(forms.ModelForm):
                 raise forms.ValidationError('A pending signup request with this login ID already exists.')
 
         if gym_id:
-            try:
-                GymIssuedID.objects.get(code=gym_id, is_used=False)
-            except GymIssuedID.DoesNotExist:
-                raise forms.ValidationError(
-                    'The provided gym-issued ID is invalid, already used, or has not been registered yet.'
-                )
-            cleaned_data['gym_issued'] = GymIssuedID.objects.get(code=gym_id)
+            # Save the provided gym-issued ID as the request identifier.
+            # Actual verification is handled later by gym staff/admin.
+            cleaned_data['gym_id'] = gym_id
 
         if phone_number:
             if SignupRequest.objects.filter(phone_number=phone_number, status=SignupRequest.STATUS_PENDING).exists():
@@ -110,6 +106,10 @@ class SignupRequestForm(forms.ModelForm):
         password = self.cleaned_data.get('password1')
         if password:
             instance.password_hash = make_password(password)
+
+        gym_id = self.cleaned_data.get('gym_id')
+        if gym_id:
+            instance.unique_id = gym_id
 
         if commit:
             instance.save()
