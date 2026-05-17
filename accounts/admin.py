@@ -136,28 +136,36 @@ class SignupRequestAdmin(admin.ModelAdmin):
         """
         pending_requests = queryset.filter(status=SignupRequest.STATUS_PENDING)
         approved_count = 0
-        failed_count = 0
 
         for signup_request in pending_requests:
             try:
                 with transaction.atomic():
                     user = signup_request.approve(request.user)
-                    send_approval_notification(
+
+                notification_sent = False
+                try:
+                    notification_sent = send_approval_notification(
                         phone_number=user.phone_number,
                         name=user.full_name,
                         login_id=user.login_id,
                     )
+                except Exception as e:
+                    messages.warning(request, f'Account approved for {signup_request.full_name}, but WhatsApp notification failed: {str(e)}')
+
+                if notification_sent:
                     signup_request.whatsapp_notified = True
-                    signup_request.save()
-                    approved_count += 1
+                    signup_request.save(update_fields=['whatsapp_notified'])
+                else:
+                    messages.warning(request, f'Account approved for {signup_request.full_name}, but WhatsApp notification could not be sent.')
+
+                approved_count += 1
             except Exception as e:
-                failed_count += 1
                 messages.error(request, f'Failed to approve {signup_request.full_name}: {str(e)}')
 
         if approved_count > 0:
             messages.success(
                 request,
-                f'{approved_count} signup request(s) approved successfully. WhatsApp notifications sent.'
+                f'{approved_count} signup request(s) approved successfully.'
             )
 
     approve_requests.short_description = 'Approve selected signup requests'
@@ -185,14 +193,17 @@ class SignupRequestAdmin(admin.ModelAdmin):
 
         for signup_request in approved_requests:
             try:
-                send_approval_notification(
+                notification_sent = send_approval_notification(
                     phone_number=signup_request.created_user.phone_number,
                     name=signup_request.created_user.full_name,
                     login_id=signup_request.created_user.login_id,
                 )
-                signup_request.whatsapp_notified = True
-                signup_request.save()
-                sent_count += 1
+                if notification_sent:
+                    signup_request.whatsapp_notified = True
+                    signup_request.save(update_fields=['whatsapp_notified'])
+                    sent_count += 1
+                else:
+                    messages.warning(request, f'Notification could not be sent to {signup_request.full_name}.')
             except Exception as e:
                 messages.error(request, f'Failed to send to {signup_request.full_name}: {str(e)}')
 
@@ -225,13 +236,22 @@ class SignupRequestAdmin(admin.ModelAdmin):
                 try:
                     signup_request = SignupRequest.objects.get(id=request_id, status=SignupRequest.STATUS_PENDING)
                     signup_request.reject(request.user, rejection_reason)
-                    send_rejection_notification(
-                        phone_number=signup_request.phone_number,
-                        name=signup_request.full_name,
-                        reason=rejection_reason,
-                    )
-                    signup_request.whatsapp_notified = True
-                    signup_request.save()
+                    notification_sent = False
+                    try:
+                        notification_sent = send_rejection_notification(
+                            phone_number=signup_request.phone_number,
+                            name=signup_request.full_name,
+                            reason=rejection_reason,
+                        )
+                    except Exception as e:
+                        messages.warning(request, f'Request rejected for {signup_request.full_name}, but WhatsApp notification failed: {str(e)}')
+
+                    if notification_sent:
+                        signup_request.whatsapp_notified = True
+                        signup_request.save(update_fields=['whatsapp_notified'])
+                    else:
+                        messages.warning(request, f'Request rejected for {signup_request.full_name}, but WhatsApp notification could not be sent.')
+
                     rejected_count += 1
                 except SignupRequest.DoesNotExist:
                     pass
@@ -241,7 +261,7 @@ class SignupRequestAdmin(admin.ModelAdmin):
             if rejected_count > 0:
                 messages.success(
                     request,
-                    f'{rejected_count} signup request(s) rejected. WhatsApp notifications sent.'
+                    f'{rejected_count} signup request(s) rejected successfully.'
                 )
             return redirect('admin:accounts_signuprequest_changelist')
 
