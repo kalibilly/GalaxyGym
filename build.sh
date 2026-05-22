@@ -10,14 +10,14 @@ python manage.py makemigrations --noinput
 
 python manage.py migrate --noinput
 
-if [ "$DJANGO_SUPERUSER_PASSWORD" ] && [ "$DJANGO_SUPERUSER_USERNAME" ] && [ "$DJANGO_SUPERUSER_EMAIL" ]; then
+if [ "$DJANGO_SUPERUSER_PASSWORD" ] && [ "$DJANGO_SUPERUSER_LOGIN_ID" ] && [ "$DJANGO_SUPERUSER_EMAIL" ]; then
     echo "Creating superuser..."
     python manage.py shell -c "
 from django.contrib.auth import get_user_model
 User = get_user_model()
-User.objects.filter(username='$DJANGO_SUPERUSER_USERNAME').delete()
+User.objects.filter(username='$DJANGO_SUPERUSER_LOGIN_ID').delete()
 User.objects.create_superuser(
-    username='$DJANGO_SUPERUSER_USERNAME',
+    username='$DJANGO_SUPERUSER_LOGIN_ID',
     email='$DJANGO_SUPERUSER_EMAIL',
     password='$DJANGO_SUPERUSER_PASSWORD'
 )
