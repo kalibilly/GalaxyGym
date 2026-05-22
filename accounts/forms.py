@@ -1,5 +1,5 @@
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm, UserChangeForm, UserCreationForm
+from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.hashers import make_password
 
 from .models import SignupRequest, UserAccount
@@ -127,10 +127,25 @@ class UserProfileForm(forms.ModelForm):
         }
 
 
-class UserAccountCreationForm(UserCreationForm):
+class UserAccountCreationForm(forms.ModelForm):
+    """
+    Custom form for creating user accounts in Django admin.
+    Properly handles the custom login_id field instead of username.
+    """
+    password1 = forms.CharField(
+        label='Password',
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        required=True,
+    )
+    password2 = forms.CharField(
+        label='Confirm Password',
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        required=True,
+    )
+
     class Meta:
         model = UserAccount
-        fields = ('login_id', 'full_name', 'email', 'phone_number', 'role')
+        fields = ('login_id', 'full_name', 'email', 'phone_number', 'role', 'is_active')
         widgets = {
             'login_id': forms.TextInput(attrs={'class': 'form-control'}),
             'full_name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -139,11 +154,36 @@ class UserAccountCreationForm(UserCreationForm):
             'role': forms.Select(attrs={'class': 'form-select'}),
         }
 
+    def clean_password2(self):
+        password1 = self.cleaned_data.get('password1')
+        password2 = self.cleaned_data.get('password2')
+        if password1 and password2 and password1 != password2:
+            raise forms.ValidationError('Passwords do not match.')
+        return password2
 
-class UserAccountChangeForm(UserChangeForm):
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data['password1'])
+        if commit:
+            user.save()
+        return user
+
+
+class UserAccountChangeForm(forms.ModelForm):
+    """
+    Custom form for changing user accounts in Django admin.
+    Properly handles the custom login_id field instead of username.
+    """
+    password = forms.CharField(
+        label='Password',
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        required=False,
+        help_text='Leave blank to keep the current password.',
+    )
+
     class Meta:
         model = UserAccount
-        fields = ('login_id', 'full_name', 'email', 'phone_number', 'role', 'is_active', 'is_staff', 'is_superuser')
+        fields = ('login_id', 'full_name', 'email', 'phone_number', 'role', 'is_active', 'is_staff', 'is_superuser', 'is_verified')
         widgets = {
             'login_id': forms.TextInput(attrs={'class': 'form-control'}),
             'full_name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -151,4 +191,21 @@ class UserAccountChangeForm(UserChangeForm):
             'phone_number': forms.TextInput(attrs={'class': 'form-control'}),
             'role': forms.Select(attrs={'class': 'form-select'}),
         }
+
+    def clean_password(self):
+        password = self.cleaned_data.get('password')
+        if password and len(password) < 8:
+            raise forms.ValidationError('Password must be at least 8 characters long.')
+        return password
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        password = self.cleaned_data.get('password')
+        if password:
+            user.set_password(password)
+        if commit:
+            user.save()
+        return user
+
+
 
