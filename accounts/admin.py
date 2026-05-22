@@ -40,6 +40,18 @@ class UserAccountAdmin(admin.ModelAdmin):
     )
     ordering = ('-date_joined',)
 
+    def get_form(self, request, obj=None, **kwargs):
+        """Use add_form when adding a new user, form when editing."""
+        if obj is None:
+            return self.add_form
+        return self.form
+
+    def get_fieldsets(self, request, obj=None):
+        """Use add_fieldsets when adding a new user."""
+        if obj is None:
+            return self.add_fieldsets
+        return self.fieldsets
+
     def get_role_display(self, obj):
         return obj.get_role_display()
     get_role_display.short_description = 'Role'
