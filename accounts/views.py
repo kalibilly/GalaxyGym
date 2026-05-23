@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
 from django.views.generic import FormView
@@ -15,12 +15,16 @@ class CustomLoginView(LoginView):
     redirect_authenticated_user = True
 
     def get_success_url(self):
-        role = getattr(self.request.user, 'role', None)
-        if role == UserAccount.ROLE_OWNER:
-            return reverse_lazy('dashboard')
-        if role == UserAccount.ROLE_STAFF:
-            return reverse_lazy('dashboard')
-        return reverse_lazy('dashboard')
+        return self.get_redirect_url() or reverse_lazy('home')
+
+
+class CustomPasswordChangeView(PasswordChangeView):
+    template_name = 'registration/password_change_form.html'
+    success_url = reverse_lazy('profile')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Your password was changed successfully.')
+        return super().form_valid(form)
 
 
 class SignupRequestView(FormView):
@@ -34,7 +38,7 @@ class SignupRequestView(FormView):
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            return redirect('dashboard')
+            return redirect('home')
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
