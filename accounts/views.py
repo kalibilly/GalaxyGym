@@ -1,9 +1,10 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.shortcuts import render, redirect
 from django.urls import reverse_lazy
-from django.views.generic import FormView
+from django.views.generic import FormView, TemplateView
 
 from .forms import LoginForm, SignupRequestForm, UserProfileForm
 from .models import UserAccount
@@ -16,6 +17,11 @@ class CustomLoginView(LoginView):
 
     def get_success_url(self):
         return self.get_redirect_url() or reverse_lazy('home')
+
+
+class DashboardHomeView(LoginRequiredMixin, TemplateView):
+    template_name = 'accounts/dashboard.html'
+    login_url = reverse_lazy('login')
 
 
 class CustomPasswordChangeView(PasswordChangeView):
@@ -74,4 +80,3 @@ def profile_view(request):
         form = UserProfileForm(instance=request.user)
 
     return render(request, 'registration/profile.html', {'form': form})
-
