@@ -1,14 +1,12 @@
 from django.urls import path
-from .views import (
-    DashboardHomeView,
-    MemberDashboardView,
-    StaffDashboardView,
-    OwnerDashboardView,
-)
-
+from . import views
+from .views import DashboardHomeView
 urlpatterns = [
-    path('', DashboardHomeView.as_view(), name='dashboard'),
-    path('member/', MemberDashboardView.as_view(), name='dashboard_member'),
-    path('staff/', StaffDashboardView.as_view(), name='dashboard_staff'),
-    path('owner/', OwnerDashboardView.as_view(), name='dashboard_owner'),
+    path('login/', views.CustomLoginView.as_view(), name='login'),
+    path('signup/', views.SignupRequestView.as_view(), name='signup'),
+    path('signup/success/', views.signup_success_view, name='signup_success'),
+    path('logout/', views.CustomLogoutView.as_view(), name='logout'),
+    path('dashboard/', DashboardHomeView.as_view(), name='dashboard'),
+    path('profile/', views.profile_view, name='profile'),
+    path('password/change/', views.CustomPasswordChangeView.as_view(), name='password_change'),
 ]
