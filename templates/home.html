@@ -8,54 +8,161 @@
 {% endblock %}
 
 {% block content %}
-<div class="home-shell">
-    <section class="home-hero-panel">
-        <div class="hero-content">
-            <div class="hero-copy">
-                <span class="hero-label">Galaxy Gym</span>
-                <h1 class="hero-title">Elite training. Futuristic performance. Bold transformation.</h1>
-                <p class="hero-text">Explore premium gym experiences through immersive imagery, crafted for members, staff, and owners who demand a modern and polished fitness destination.</p>
-                <div class="hero-actions">
-                    <a href="{% url 'login' %}" class="hero-button hero-button-primary">Login</a>
-                    <a href="{% url 'signup' %}" class="hero-button hero-button-secondary">Request Access</a>
+<div class="container-fluid py-5">
+    {% if user.is_authenticated %}
+        <div class="row mb-4">
+            <div class="col-lg-8">
+                <div class="card card-dark mb-4">
+                    <div class="card-body">
+                        <h1 class="h3 text-white">Welcome back, {{ user.full_name|default:user.login_id }}!</h1>
+                        <p class="text-muted mb-0">Your Galaxy Gym home page contains your latest membership, payment, and alerts.</p>
+                    </div>
                 </div>
             </div>
-            <div class="hero-aside">
-                <div class="hero-figure">
-                    <div class="hero-figure-overlay"></div>
-                    <img class="hero-image" src="{% static 'images/' %}{{ thumbnail }}" alt="Galaxy Gym featured workout" loading="lazy">
-                    <div class="hero-figure-text">
-                        <span>Premium Gym Showcase</span>
-                        <strong>The ultimate gym lifestyle begins here.</strong>
+            <div class="col-lg-4 text-lg-end">
+                <a href="{% url 'dashboard' %}" class="btn btn-outline-light mb-2">Go to Dashboard</a>
+                <a href="{% url 'profile' %}" class="btn btn-primary mb-2">Profile</a>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card card-dark">
+                    <div class="card-header bg-primary">
+                        <h5 class="mb-0 text-white">Account Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-5">Full Name:</dt>
+                            <dd class="col-sm-7">{{ user.full_name|default:user.login_id }}</dd>
+                            <dt class="col-sm-5">Role:</dt>
+                            <dd class="col-sm-7">{{ user.get_role_display }}</dd>
+                            {% if gym_id %}
+                                <dt class="col-sm-5">Gym ID:</dt>
+                                <dd class="col-sm-7">{{ gym_id }}</dd>
+                            {% endif %}
+                            {% if staff_profile %}
+                                <dt class="col-sm-5">Department:</dt>
+                                <dd class="col-sm-7">{{ staff_profile.department.name|default:'N/A' }}</dd>
+                                <dt class="col-sm-5">Position:</dt>
+                                <dd class="col-sm-7">{{ staff_profile.designation|default:'N/A' }}</dd>
+                            {% endif %}
+                            {% if membership_summary %}
+                                <dt class="col-sm-5">Membership:</dt>
+                                <dd class="col-sm-7">{{ membership_summary.plan }}</dd>
+                                <dt class="col-sm-5">Expires:</dt>
+                                <dd class="col-sm-7">{{ membership_summary.expiry_date }}</dd>
+                            {% endif %}
+                            <dt class="col-sm-5">Wallet:</dt>
+                            <dd class="col-sm-7">₹{{ wallet_balance }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="row g-4">
+                    {% if membership_expiry_alert %}
+                        <div class="col-12">
+                            <div class="alert alert-warning bg-warning text-dark">
+                                <strong>Membership expiring soon.</strong> Your membership is within 7 days of expiry. Please renew before the deadline to avoid interruption.
+                            </div>
+                        </div>
+                    {% endif %}
+                    {% if pending_payment_alert %}
+                        <div class="col-12">
+                            <div class="alert alert-danger bg-danger text-white">
+                                <strong>Pending payment detected.</strong> You have ₹{{ pending_amount }} outstanding. Please settle the amount to keep your membership active.
+                            </div>
+                        </div>
+                    {% endif %}
+                    {% if downgrade_warning %}
+                        <div class="col-12">
+                            <div class="alert alert-warning bg-warning text-dark">
+                                <strong>Action required:</strong> Your payment is overdue more than 7 days. A membership downgrade may be applied soon.
+                                {% if downgrade_plan %}
+                                    Suggested downgrade: {{ downgrade_plan.name }}.
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+                    <div class="col-12">
+                        <div class="card card-dark">
+                            <div class="card-header bg-info">
+                                <h5 class="mb-0 text-white">Quick Actions</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <a href="{% url 'profile' %}" class="btn btn-outline-light w-100">Update Profile</a>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <a href="{% url 'payments:invoice_list' %}" class="btn btn-outline-light w-100">View Payments</a>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <a href="{% url 'attendance:attendance_list' %}" class="btn btn-outline-light w-100">View Attendance</a>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <a href="{% url 'events' %}" class="btn btn-outline-light w-100">View Events</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
-
-    <section class="showcase-section">
-        <div class="section-header">
-            <div>
-                <p class="section-subtitle">Animated showcase</p>
-                <h2>Explore the training space in motion</h2>
-            </div>
-            <p class="section-description">Each card moves into view with refined motion, glassmorphism styling, and a premium layered presentation across desktop, tablet, and mobile.</p>
-        </div>
-
-        <div class="showcase-grid">
-            {% for image in images %}
-            <article class="showcase-card" data-index="{{ forloop.counter0 }}">
-                <div class="card-blur"></div>
-                <div class="card-frame"></div>
-                <img src="{% static 'images/' %}{{ image }}" alt="Gym showcase {{ forloop.counter }}" class="showcase-image" loading="lazy">
-                <div class="card-copy">
-                    <span>Featured image</span>
-                    <h3>Gym moment {{ forloop.counter }}</h3>
+    {% else %}
+        <div class="home-shell">
+            <section class="home-hero-panel">
+                <div class="hero-content">
+                    <div class="hero-copy">
+                        <span class="hero-label">Galaxy Gym</span>
+                        <h1 class="hero-title">Elite training. Futuristic performance. Bold transformation.</h1>
+                        <p class="hero-text">Explore premium gym experiences through immersive imagery, crafted for members, staff, and owners who demand a modern and polished fitness destination.</p>
+                        <div class="hero-actions">
+                            <a href="{% url 'login' %}" class="hero-button hero-button-primary">Login</a>
+                            <a href="{% url 'signup' %}" class="hero-button hero-button-secondary">Request Access</a>
+                        </div>
+                    </div>
+                    <div class="hero-aside">
+                        <div class="hero-figure">
+                            <div class="hero-figure-overlay"></div>
+                            <img class="hero-image" src="{% static 'images/' %}{{ thumbnail }}" alt="Galaxy Gym featured workout" loading="lazy">
+                            <div class="hero-figure-text">
+                                <span>Premium Gym Showcase</span>
+                                <strong>The ultimate gym lifestyle begins here.</strong>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </article>
-            {% endfor %}
+            </section>
+
+            <section class="showcase-section">
+                <div class="section-header">
+                    <div>
+                        <p class="section-subtitle">Animated showcase</p>
+                        <h2>Explore the training space in motion</h2>
+                    </div>
+                    <p class="section-description">Each card moves into view with refined motion, glassmorphism styling, and a premium layered presentation across desktop, tablet, and mobile.</p>
+                </div>
+
+                <div class="showcase-grid">
+                    {% for image in images %}
+                    <article class="showcase-card" data-index="{{ forloop.counter0 }}">
+                        <div class="card-blur"></div>
+                        <div class="card-frame"></div>
+                        <img src="{% static 'images/' %}{{ image }}" alt="Gym showcase {{ forloop.counter }}" class="showcase-image" loading="lazy">
+                        <div class="card-copy">
+                            <span>Featured image</span>
+                            <h3>Gym moment {{ forloop.counter }}</h3>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+            </section>
         </div>
-    </section>
+    {% endif %}
 </div>
 {% endblock %}
 
