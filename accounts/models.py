@@ -178,7 +178,7 @@ class SignupRequest(models.Model):
         if UserAccount.objects.filter(login_id=self.desired_login_id).exists():
             raise ValueError(f'User with login_id {self.desired_login_id} already exists.')
 
-        user = UserAccount.objects.create_user(
+        user = UserAccount(
             login_id=self.desired_login_id,
             email=self.email,
             phone_number=self.phone_number,
@@ -186,6 +186,7 @@ class SignupRequest(models.Model):
             role=self.requested_role,
             is_active=True,
             is_verified=True,
+            is_staff=self.requested_role in {UserAccount.ROLE_OWNER, UserAccount.ROLE_STAFF},
         )
         user.password = self.password_hash
         user.save()
