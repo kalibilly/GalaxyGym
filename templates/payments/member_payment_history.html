@@ -43,7 +43,7 @@
                                     <a href="{% url 'payments:invoice_detail' invoice.pk %}">{{ invoice.invoice_no }}</a>
                                     <div class="small text-muted">{{ invoice.invoice_date|date:'M d, Y' }} — {{ invoice.get_status_display }}</div>
                                 </div>
-                                <span class="badge bg-{{ 'secondary' if invoice.status == 'unpaid' else 'warning' if invoice.status == 'partial' else 'success' if invoice.status == 'paid' else 'danger' }}">{{ invoice.balance_amount }}</span>
+                                <span class="badge bg-{{ invoice.status_badge_class }}">{{ invoice.balance_amount }}</span>
                             </li>
                         {% endfor %}
                     </ul>
