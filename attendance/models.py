@@ -75,6 +75,14 @@ class AttendanceLog(TimeStampedModel):
         target = self.member.full_name if self.member else self.staff.full_name if self.staff else 'Unknown'
         return f'{target} — {self.date} ({self.get_person_type_display()})'
 
+    @property
+    def status_badge_class(self):
+        return {
+            self.STATUS_PRESENT: 'success',
+            self.STATUS_LATE: 'warning',
+            self.STATUS_ABSENT: 'secondary',
+        }.get(self.status, 'secondary')
+
     def clean(self):
         has_member = bool(self.member)
         has_staff = bool(self.staff)
