@@ -3,7 +3,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
-from core.views import HomeView
+from core.views import HomeView, EventListView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -15,6 +15,7 @@ urlpatterns = [
     path('memberships/', include('memberships.urls')),
     path('payments/', include('payments.urls')),
     path('attendance/', include('attendance.urls')),
+    path('events/', EventListView.as_view(), name='events'),
     path('notifications/', include('notifications.urls')),
     path('', HomeView.as_view(), name='home'),
 ]
