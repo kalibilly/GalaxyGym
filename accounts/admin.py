@@ -224,6 +224,33 @@ class SignupRequestAdmin(admin.ModelAdmin):
 
     send_whatsapp_notification.short_description = 'Resend WhatsApp notifications'
 
+    def save_model(self, request, obj, form, change):
+        """
+        If a signup request is approved or rejected via the admin form,
+        ensure the approval workflow creates the real UserAccount and preserves audit metadata.
+        """
+        if change:
+            try:
+                original = SignupRequest.objects.get(pk=obj.pk)
+            except SignupRequest.DoesNotExist:
+                original = None
+
+            if original and original.status == SignupRequest.STATUS_PENDING:
+                if obj.status == SignupRequest.STATUS_APPROVED:
+                    try:
+                        obj.approve(request.user)
+                    except Exception as e:
+                        messages.error(request, f'Failed to approve {obj.full_name}: {str(e)}')
+                    return
+                if obj.status == SignupRequest.STATUS_REJECTED:
+                    try:
+                        obj.reject(request.user, obj.rejection_reason or '')
+                    except Exception as e:
+                        messages.error(request, f'Failed to reject {obj.full_name}: {str(e)}')
+                    return
+
+        super().save_model(request, obj, form, change)
+
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
