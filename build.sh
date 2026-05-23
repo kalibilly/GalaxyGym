@@ -4,6 +4,8 @@ pip install -r requirements.txt
 
 python manage.py collectstatic --noinput
 
+python manage.py makemigrations --noinput
+
 python manage.py migrate --noinput
 
 if [ "$DJANGO_SUPERUSER_PASSWORD" ] && [ "$DJANGO_SUPERUSER_LOGIN_ID" ] && [ "$DJANGO_SUPERUSER_EMAIL" ] && [ "$DJANGO_SUPERUSER_PHONE_NUMBER" ]; then
