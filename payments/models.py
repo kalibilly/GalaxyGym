@@ -50,6 +50,14 @@ class Invoice(TimeStampedModel):
     def __str__(self):
         return f'{self.invoice_no} — {self.member.full_name}'
 
+    @property
+    def status_badge_class(self):
+        return {
+            self.STATUS_PARTIAL: 'warning',
+            self.STATUS_PAID: 'success',
+            self.STATUS_OVERDUE: 'danger',
+        }.get(self.status, 'secondary')
+
     def clean(self):
         if self.due_date < self.invoice_date:
             raise ValidationError('Invoice due date cannot be earlier than the invoice date.')
