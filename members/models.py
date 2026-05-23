@@ -1,3 +1,7 @@
+from datetime import date
+from decimal import Decimal
+
+from django.apps import apps
 from django.db import models
 from django.utils import timezone
 
@@ -51,6 +55,7 @@ class Member(TimeStampedModel, ActiveStatusModel):
         on_delete=models.SET_NULL,
         related_name='assigned_members',
     )
+    wallet_balance = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     address = models.TextField(blank=True)
     date_of_joining = models.DateField(default=timezone.now)
     status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
@@ -67,3 +72,49 @@ class Member(TimeStampedModel, ActiveStatusModel):
     @property
     def active_membership(self):
         return self.memberships.filter(status='active').order_by('-end_date').first()
+
+    @property
+    def pending_amount(self):
+        Invoice = apps.get_model('payments', 'Invoice')
+        unpaid_statuses = [Invoice.STATUS_UNPAID, Invoice.STATUS_PARTIAL, Invoice.STATUS_OVERDUE]
+        total = self.invoices.filter(status__in=unpaid_statuses).aggregate(total=models.Sum('balance_amount'))['total']
+        return total or Decimal('0.00')
+
+    @property
+    def overdue_days(self):
+        Invoice = apps.get_model('payments', 'Invoice')
+        overdue_invoice = self.invoices.filter(status=Invoice.STATUS_OVERDUE).order_by('due_date').first()
+        if not overdue_invoice or not overdue_invoice.due_date:
+            return 0
+        return max((date.today() - overdue_invoice.due_date).days, 0)
+
+    def has_expiring_membership(self, within_days=7):
+        membership = self.active_membership
+        if membership is None or membership.end_date is None:
+            return False
+        return (membership.end_date - date.today()).days <= within_days and membership.end_date >= date.today()
+
+    def needs_pending_payment_warning(self):
+        return self.pending_amount > Decimal('0.00')
+
+    def should_warn_downgrade(self):
+        return self.pending_amount > Decimal('0.00') and self.overdue_days > 7 and self.active_membership is not None
+
+    def suggested_downgrade_plan(self):
+        membership = self.active_membership
+        if not membership or not membership.plan:
+            return None
+        MembershipPlan = apps.get_model('memberships', 'MembershipPlan')
+        lower_plans = MembershipPlan.objects.filter(duration_days__lt=membership.plan.duration_days).order_by('-duration_days')
+        return lower_plans.first() if lower_plans.exists() else None
+
+    def get_membership_summary(self):
+        membership = self.active_membership
+        if not membership:
+            return None
+        return {
+            'plan': membership.plan.name,
+            'expiry_date': membership.end_date,
+            'status': membership.status,
+            'amount': membership.final_amount,
+        }
