@@ -172,6 +172,18 @@ class SignupRequest(models.Model):
         """
         Approve the signup request and create the user account.
         """
+        if self.status == self.STATUS_APPROVED:
+            if self.created_user:
+                return self.created_user
+
+            existing_user = UserAccount.objects.filter(login_id=self.desired_login_id).first()
+            if existing_user:
+                self.created_user = existing_user
+                self.reviewed_at = self.reviewed_at or timezone.now()
+                self.reviewed_by = reviewed_by or self.reviewed_by
+                self.save(update_fields=['created_user', 'reviewed_at', 'reviewed_by'])
+                return existing_user
+
         if self.status != self.STATUS_PENDING:
             raise ValueError(f'Can only approve pending requests. Current status: {self.status}')
 
