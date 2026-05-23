@@ -23,7 +23,7 @@
                                         <strong>{{ attendance.date|date:'M d, Y' }}</strong>
                                         <div class="small text-muted">Checked in at {{ attendance.check_in_time|date:'H:i' }}</div>
                                     </div>
-                                    <span class="badge bg-{{ 'success' if attendance.status == 'present' else 'warning' if attendance.status == 'late' else 'secondary' }}">{{ attendance.get_status_display }}</span>
+                                    <span class="badge bg-{{ attendance.status_badge_class }}">{{ attendance.get_status_display }}</span>
                                 </div>
                             </a>
                         {% endfor %}
