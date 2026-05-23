@@ -27,6 +27,33 @@ class HomeView(TemplateView):
                 'image10.jpeg',
             ],
         })
+
+        if self.request.user.is_authenticated:
+            member_profile = getattr(self.request.user, 'member_profile', None)
+            staff_profile = getattr(self.request.user, 'staff_profile', None)
+            context['member_profile'] = member_profile
+            context['staff_profile'] = staff_profile
+            context['user_role'] = getattr(self.request.user, 'role', None)
+            context['gym_id'] = member_profile.member_id if member_profile else None
+            context['membership_summary'] = member_profile.get_membership_summary() if member_profile else None
+            context['pending_amount'] = member_profile.pending_amount if member_profile else 0
+            context['wallet_balance'] = member_profile.wallet_balance if member_profile else 0
+            context['membership_expiry_alert'] = member_profile.has_expiring_membership() if member_profile else False
+            context['pending_payment_alert'] = member_profile.needs_pending_payment_warning() if member_profile else False
+            context['downgrade_warning'] = member_profile.should_warn_downgrade() if member_profile else False
+            context['downgrade_plan'] = member_profile.suggested_downgrade_plan() if member_profile else None
+
+        return context
+
+
+class EventListView(LoginRequiredMixin, TemplateView):
+    template_name = 'events/list.html'
+    login_url = reverse_lazy('login')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['page_title'] = 'Events'
+        context['events'] = []
         return context
 
 
