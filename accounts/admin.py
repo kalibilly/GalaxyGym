@@ -237,14 +237,20 @@ class SignupRequestAdmin(admin.ModelAdmin):
 
             if original and original.status == SignupRequest.STATUS_PENDING:
                 if obj.status == SignupRequest.STATUS_APPROVED:
+                    obj.status = SignupRequest.STATUS_PENDING
                     try:
-                        obj.approve(request.user)
+                        with transaction.atomic():
+                            super().save_model(request, obj, form, change)
+                            obj.approve(request.user)
                     except Exception as e:
                         messages.error(request, f'Failed to approve {obj.full_name}: {str(e)}')
                     return
                 if obj.status == SignupRequest.STATUS_REJECTED:
+                    obj.status = SignupRequest.STATUS_PENDING
                     try:
-                        obj.reject(request.user, obj.rejection_reason or '')
+                        with transaction.atomic():
+                            super().save_model(request, obj, form, change)
+                            obj.reject(request.user, obj.rejection_reason or '')
                     except Exception as e:
                         messages.error(request, f'Failed to reject {obj.full_name}: {str(e)}')
                     return
