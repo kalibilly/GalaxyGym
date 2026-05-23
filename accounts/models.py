@@ -1,7 +1,7 @@
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 from core.models import phone_regex
@@ -172,44 +172,51 @@ class SignupRequest(models.Model):
         """
         Approve the signup request and create the user account.
         """
-        if self.status == self.STATUS_APPROVED:
-            if self.created_user:
-                return self.created_user
+        with transaction.atomic():
+            self.refresh_from_db()
 
-            existing_user = UserAccount.objects.filter(login_id=self.desired_login_id).first()
-            if existing_user:
-                self.created_user = existing_user
-                self.reviewed_at = self.reviewed_at or timezone.now()
-                self.reviewed_by = reviewed_by or self.reviewed_by
-                self.save(update_fields=['created_user', 'reviewed_at', 'reviewed_by'])
-                return existing_user
+            if self.status == self.STATUS_APPROVED:
+                if self.created_user:
+                    return self.created_user
 
-        if self.status != self.STATUS_PENDING:
-            raise ValueError(f'Can only approve pending requests. Current status: {self.status}')
+                existing_user = UserAccount.objects.filter(login_id=self.desired_login_id).first()
+                if existing_user:
+                    self.created_user = existing_user
+                    self.reviewed_at = self.reviewed_at or timezone.now()
+                    self.reviewed_by = reviewed_by or self.reviewed_by
+                    self.save(update_fields=['created_user', 'reviewed_at', 'reviewed_by'])
+                    return existing_user
 
-        if UserAccount.objects.filter(login_id=self.desired_login_id).exists():
-            raise ValueError(f'User with login_id {self.desired_login_id} already exists.')
+                raise ValueError(
+                    f'Cannot approve request: status is already approved but no linked user exists for login_id {self.desired_login_id}.'
+                )
 
-        user = UserAccount(
-            login_id=self.desired_login_id,
-            email=self.email,
-            phone_number=self.phone_number,
-            full_name=self.full_name,
-            role=self.requested_role,
-            is_active=True,
-            is_verified=True,
-            is_staff=self.requested_role in {UserAccount.ROLE_OWNER, UserAccount.ROLE_STAFF},
-        )
-        user.password = self.password_hash
-        user.save()
+            if self.status != self.STATUS_PENDING:
+                raise ValueError(f'Can only approve pending requests. Current status: {self.status}')
 
-        self.status = self.STATUS_APPROVED
-        self.reviewed_at = timezone.now()
-        self.reviewed_by = reviewed_by
-        self.created_user = user
-        self.save()
+            if UserAccount.objects.filter(login_id=self.desired_login_id).exists():
+                raise ValueError(f'User with login_id {self.desired_login_id} already exists.')
 
-        return user
+            user = UserAccount(
+                login_id=self.desired_login_id,
+                email=self.email,
+                phone_number=self.phone_number,
+                full_name=self.full_name,
+                role=self.requested_role,
+                is_active=True,
+                is_verified=True,
+                is_staff=self.requested_role in {UserAccount.ROLE_OWNER, UserAccount.ROLE_STAFF},
+            )
+            user.password = self.password_hash
+            user.save()
+
+            self.status = self.STATUS_APPROVED
+            self.reviewed_at = timezone.now()
+            self.reviewed_by = reviewed_by
+            self.created_user = user
+            self.save(update_fields=['status', 'reviewed_at', 'reviewed_by', 'created_user'])
+
+            return user
 
     def reject(self, reviewed_by, reason=''):
         """
