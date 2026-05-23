@@ -53,7 +53,7 @@
                     <td>{{ invoice.total_amount }}</td>
                     <td>{{ invoice.balance_amount }}</td>
                     <td>
-                        <span class="badge bg-{{ 'warning' if invoice.status == 'partial' else 'success' if invoice.status == 'paid' else 'danger' if invoice.status == 'overdue' else 'secondary' }}">{{ invoice.get_status_display }}</span>
+                        <span class="badge bg-{{ invoice.status_badge_class }}">{{ invoice.get_status_display }}</span>
                     </td>
                     <td class="text-end">
                         <a href="{% url 'payments:invoice_update' invoice.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
