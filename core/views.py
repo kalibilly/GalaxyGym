@@ -1,4 +1,5 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 from django.views.generic import TemplateView
 from django.urls import reverse_lazy
@@ -72,7 +73,7 @@ class DashboardHomeView(LoginRequiredMixin, TemplateView):
         elif role == UserAccount.ROLE_STAFF:
             return redirect('dashboard_staff')
         elif role == UserAccount.ROLE_MEMBER:
-            return redirect('dashboard_member')
+            raise PermissionDenied('Member access is disabled. Contact gym staff for support.')
         
         return super().get(request, *args, **kwargs)
 
