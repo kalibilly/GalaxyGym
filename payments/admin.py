@@ -14,9 +14,10 @@ class InvoiceAdmin(admin.ModelAdmin):
         'total_amount',
         'paid_amount',
         'balance_amount',
+        'pending_payment_status',
         'status',
     )
-    list_filter = ('status', 'invoice_date', 'due_date')
+    list_filter = ('status', 'pending_payment_status', 'invoice_date', 'due_date')
     search_fields = ('invoice_no', 'member__full_name', 'member__member_id')
     readonly_fields = ('paid_amount', 'balance_amount', 'status', 'created_at', 'updated_at')
     raw_id_fields = ('member', 'membership')
