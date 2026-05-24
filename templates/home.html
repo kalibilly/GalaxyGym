@@ -97,13 +97,13 @@
                                         <a href="{% url 'profile' %}" class="btn btn-outline-light w-100">Update Profile</a>
                                     </div>
                                     <div class="col-md-6">
-                                        <a href="{% url 'memberships:plan_catalog' %}" class="btn btn-outline-light w-100">Buy Membership</a>
-                                    </div>
-                                    <div class="col-md-6">
                                         <a href="{% url 'payments:invoice_list' %}" class="btn btn-outline-light w-100">View Payments</a>
                                     </div>
                                     <div class="col-md-6">
                                         <a href="{% url 'attendance:attendance_list' %}" class="btn btn-outline-light w-100">View Attendance</a>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <a href="{% url 'memberships:plan_list' %}" class="btn btn-outline-light w-100">Manage Plans</a>
                                     </div>
                                     <div class="col-md-6">
                                         <a href="{% url 'events' %}" class="btn btn-outline-light w-100">View Events</a>
@@ -122,10 +122,9 @@
                     <div class="hero-copy">
                         <span class="hero-label">Galaxy Gym</span>
                         <h1 class="hero-title">Elite training. Futuristic performance. Bold transformation.</h1>
-                        <p class="hero-text">Explore premium gym experiences through immersive imagery, crafted for members, staff, and owners who demand a modern and polished fitness destination.</p>
+                        <p class="hero-text">Owner and receptionist access only. Manage members, payments, and attendance through the gym register system.</p>
                         <div class="hero-actions">
                             <a href="{% url 'login' %}" class="hero-button hero-button-primary">Login</a>
-                            <a href="{% url 'signup' %}" class="hero-button hero-button-secondary">Request Access</a>
                         </div>
                     </div>
                     <div class="hero-aside">
