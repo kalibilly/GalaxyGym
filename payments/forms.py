@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django import forms
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 from .models import Invoice, Payment
 
@@ -13,29 +16,39 @@ class InvoiceForm(forms.ModelForm):
             'membership',
             'invoice_date',
             'due_date',
-            'subtotal',
-            'discount_amount',
-            'tax_amount',
+            'balance_amount',
+            'pending_payment_status',
             'remarks',
         ]
         widgets = {
             'invoice_date': forms.DateInput(attrs={'type': 'date'}),
-            'due_date': forms.DateInput(attrs={'type': 'date'}),
+            'due_date': forms.DateInput(attrs={'type': 'date', 'readonly': 'readonly'}),
             'remarks': forms.Textarea(attrs={'rows': 3}),
         }
+        labels = {
+            'invoice_date': 'Membership Start Date',
+            'balance_amount': 'Pending Amount',
+            'pending_payment_status': 'Pending Payment Status',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'invoice_no' in self.fields:
+            self.fields['invoice_no'].widget.attrs.update({'readonly': 'readonly'})
+        if 'due_date' in self.fields:
+            self.fields['due_date'].widget.attrs.update({'readonly': 'readonly'})
 
     def clean(self):
         cleaned_data = super().clean()
-        subtotal = cleaned_data.get('subtotal') or 0
-        discount_amount = cleaned_data.get('discount_amount') or 0
-        tax_amount = cleaned_data.get('tax_amount') or 0
         invoice_date = cleaned_data.get('invoice_date')
-        due_date = cleaned_data.get('due_date')
+        balance_amount = cleaned_data.get('balance_amount')
 
-        if subtotal < 0 or discount_amount < 0 or tax_amount < 0:
-            raise ValidationError('Amount fields cannot be negative.')
-        if due_date and invoice_date and due_date < invoice_date:
-            raise ValidationError('Due date cannot be earlier than invoice date.')
+        if balance_amount is not None and balance_amount < 0:
+            raise ValidationError('Pending amount cannot be negative.')
+
+        if invoice_date:
+            cleaned_data['due_date'] = invoice_date + timedelta(days=7)
+
         return cleaned_data
 
 
