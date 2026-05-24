@@ -109,11 +109,13 @@ class Payment(TimeStampedModel):
     PAYMENT_CASH = 'cash'
     PAYMENT_UPI = 'upi'
     PAYMENT_BANK = 'bank_transfer'
+    PAYMENT_ONLINE = 'online'
 
     PAYMENT_CHOICES = [
         (PAYMENT_CASH, 'Cash'),
         (PAYMENT_UPI, 'UPI'),
         (PAYMENT_BANK, 'Bank Transfer'),
+        (PAYMENT_ONLINE, 'Online'),
     ]
 
     invoice = models.ForeignKey(
