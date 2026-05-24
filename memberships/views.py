@@ -18,6 +18,17 @@ from .forms import MembershipForm, MembershipPlanForm, MembershipPurchaseForm
 from .models import Membership, MembershipPlan
 
 
+def normalize_user_role(user):
+    role = getattr(user, 'role', '')
+    if not isinstance(role, str):
+        return ''
+    return role.strip().lower()
+
+
+def is_member_user(user):
+    return normalize_user_role(user) == UserAccount.ROLE_MEMBER
+
+
 class MembershipPlanListView(LoginRequiredMixin, ListView):
     model = MembershipPlan
     template_name = 'memberships/plan_list.html'
@@ -68,8 +79,7 @@ class MembershipPlanCatalogView(LoginRequiredMixin, ListView):
     context_object_name = 'plans'
 
     def dispatch(self, request, *args, **kwargs):
-        member_profile = getattr(request.user, 'member_profile', None)
-        if getattr(request.user, 'role', None) != UserAccount.ROLE_MEMBER or member_profile is None:
+        if not is_member_user(request.user):
             raise PermissionDenied('Only gym members can access the membership catalog.')
         return super().dispatch(request, *args, **kwargs)
 
@@ -90,7 +100,7 @@ class MembershipPurchaseView(LoginRequiredMixin, FormView):
     def dispatch(self, request, *args, **kwargs):
         self.plan = get_object_or_404(MembershipPlan, pk=self.kwargs['pk'], is_active=True)
         member_profile = getattr(request.user, 'member_profile', None)
-        if getattr(request.user, 'role', None) != UserAccount.ROLE_MEMBER or member_profile is None:
+        if not is_member_user(request.user) or member_profile is None:
             raise PermissionDenied('Only members can purchase membership plans online.')
         return super().dispatch(request, *args, **kwargs)
 
@@ -194,7 +204,9 @@ class MembershipPurchaseSuccessView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         invoice = get_object_or_404(Invoice, pk=self.kwargs['invoice_pk'])
         member_profile = getattr(self.request.user, 'member_profile', None)
-        if getattr(self.request.user, 'role', None) != UserAccount.ROLE_OWNER and invoice.member != member_profile:
+        if not is_member_user(self.request.user) and normalize_user_role(self.request.user) != UserAccount.ROLE_OWNER:
+            raise PermissionDenied('You are not authorized to view this purchase.')
+        if normalize_user_role(self.request.user) != UserAccount.ROLE_OWNER and invoice.member != member_profile:
             raise PermissionDenied('You are not authorized to view this purchase.')
 
         context['invoice'] = invoice
