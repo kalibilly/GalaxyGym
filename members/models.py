@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.apps import apps
@@ -60,6 +60,20 @@ class Member(TimeStampedModel, ActiveStatusModel):
     date_of_joining = models.DateField(default=timezone.now)
     status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
     notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        'accounts.UserAccount',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_members',
+    )
+    updated_by = models.ForeignKey(
+        'accounts.UserAccount',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='updated_members',
+    )
 
     class Meta:
         ordering = ['member_id']
@@ -118,3 +132,48 @@ class Member(TimeStampedModel, ActiveStatusModel):
             'status': membership.status,
             'amount': membership.final_amount,
         }
+
+
+class MemberDeleteRequest(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_APPROVED = 'approved'
+    STATUS_REJECTED = 'rejected'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_REJECTED, 'Rejected'),
+    ]
+
+    member = models.ForeignKey(
+        Member,
+        on_delete=models.CASCADE,
+        related_name='delete_requests',
+    )
+    requested_by = models.ForeignKey(
+        'accounts.UserAccount',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='member_delete_requests',
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    reviewed_by = models.ForeignKey(
+        'accounts.UserAccount',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='member_delete_request_reviews',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    admin_comments = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+        verbose_name = 'Member Delete Request'
+        verbose_name_plural = 'Member Delete Requests'
+
+    def __str__(self):
+        return f'Delete request for {self.member.full_name} ({self.get_status_display()})'
