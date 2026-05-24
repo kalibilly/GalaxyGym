@@ -39,6 +39,23 @@
                 </dl>
             </div>
         </div>
+        {% if latest_invoice %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5>Latest Invoice</h5>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Invoice</dt>
+                        <dd class="col-sm-8"><a href="{% url 'payments:invoice_detail' latest_invoice.pk %}">{{ latest_invoice.invoice_no }}</a></dd>
+                        <dt class="col-sm-4">Status</dt>
+                        <dd class="col-sm-8"><span class="badge bg-{{ latest_invoice.status_badge_class }}">{{ latest_invoice.get_status_display }}</span></dd>
+                        <dt class="col-sm-4">Total Due</dt>
+                        <dd class="col-sm-8">{{ latest_invoice.balance_amount }}</dd>
+                        <dt class="col-sm-4">Due Date</dt>
+                        <dd class="col-sm-8">{{ latest_invoice.due_date|date:'M d, Y' }}</dd>
+                    </dl>
+                </div>
+            </div>
+        {% endif %}
 
         <div class="d-flex justify-content-between">
             <a href="{% url 'memberships:update' membership.pk %}" class="btn btn-primary">Edit Membership</a>
