@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}Choose a Membership Plan - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="h4 mb-1">Membership Plans</h1>
+        <p class="text-muted">Select a plan that matches your training goals and budget.</p>
+    </div>
+    <a href="{% url 'memberships:plan_list' %}" class="btn btn-outline-secondary">Plan Admin</a>
+</div>
+
+<div class="row g-4">
+    {% for plan in plans %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">{{ plan.name }}</h5>
+            </div>
+            <div class="card-body d-flex flex-column">
+                <p class="text-muted mb-3">{{ plan.description|linebreaksbr|default:'No description available.' }}</p>
+                <ul class="list-unstyled mb-3">
+                    <li><strong>Duration:</strong> {{ plan.duration_months }} month{{ plan.duration_months|pluralize }}</li>
+                    <li><strong>Cardio:</strong> {{ plan.cardio_label }}</li>
+                    <li><strong>Price:</strong> ₹{{ plan.price }}</li>
+                    <li><strong>Payment:</strong> {{ plan.payment_rule_label }}</li>
+                </ul>
+                <div class="mt-auto">
+                    <a href="{% url 'memberships:plan_purchase' plan.pk %}" class="btn btn-success w-100">Buy Now</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info mb-0">No membership plans are available right now.</div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

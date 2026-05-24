@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Purchase Complete - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="alert alert-success">
+            <h4 class="alert-heading">Purchase submitted successfully</h4>
+            <p>Your membership purchase has been recorded. Review the invoice below and complete any remaining payment from your account.</p>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5>Membership</h5>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Plan</dt>
+                    <dd class="col-sm-8">{{ membership.plan.name }}</dd>
+                    <dt class="col-sm-4">Start Date</dt>
+                    <dd class="col-sm-8">{{ membership.start_date|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">End Date</dt>
+                    <dd class="col-sm-8">{{ membership.end_date|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">Final Amount</dt>
+                    <dd class="col-sm-8">₹{{ membership.final_amount }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5>Invoice Summary</h5>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Invoice Number</dt>
+                    <dd class="col-sm-8">{{ invoice.invoice_no }}</dd>
+                    <dt class="col-sm-4">Total Amount</dt>
+                    <dd class="col-sm-8">₹{{ invoice.total_amount }}</dd>
+                    <dt class="col-sm-4">Paid Amount</dt>
+                    <dd class="col-sm-8">₹{{ invoice.paid_amount }}</dd>
+                    <dt class="col-sm-4">Balance</dt>
+                    <dd class="col-sm-8">₹{{ invoice.balance_amount }}</dd>
+                    <dt class="col-sm-4">Due Date</dt>
+                    <dd class="col-sm-8">{{ invoice.due_date|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8"><span class="badge bg-{{ invoice.status_badge_class }}">{{ invoice.get_status_display }}</span></dd>
+                </dl>
+            </div>
+        </div>
+
+        {% if payment %}
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5>Payment</h5>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Amount Paid</dt>
+                    <dd class="col-sm-8">₹{{ payment.amount_paid }}</dd>
+                    <dt class="col-sm-4">Payment Date</dt>
+                    <dd class="col-sm-8">{{ payment.payment_date|date:'M d, Y' }}</dd>
+                    <dt class="col-sm-4">Payment Mode</dt>
+                    <dd class="col-sm-8">{{ payment.get_payment_mode_display }}</dd>
+                    <dt class="col-sm-4">Reference</dt>
+                    <dd class="col-sm-8">{{ payment.transaction_reference|default:'—' }}</dd>
+                </dl>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2">
+            <a href="{% url 'memberships:detail' membership.pk %}" class="btn btn-primary">View Membership</a>
+            <a href="{% url 'payments:invoice_detail' invoice.pk %}" class="btn btn-outline-secondary">View Invoice</a>
+            <a href="{% url 'memberships:plan_catalog' %}" class="btn btn-link">Browse Other Plans</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

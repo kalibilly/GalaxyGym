@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+
+{% block title %}Purchase {{ plan.name }} - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h1 class="h4 mb-2">Purchase {{ plan.name }}</h1>
+                <p class="text-muted mb-3">Complete your membership purchase online and keep your outstanding balance on record.</p>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Duration</dt>
+                    <dd class="col-sm-8">{{ plan.duration_days }} days</dd>
+                    <dt class="col-sm-4">Price</dt>
+                    <dd class="col-sm-8">{{ plan.price }}</dd>
+                    <dt class="col-sm-4">Description</dt>
+                    <dd class="col-sm-8">{{ plan.description|linebreaksbr|default:'No description provided.' }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        {% if purchase_created %}
+            <div class="alert alert-success">
+                Your membership has been created. Review the invoice below and complete payment to activate your membership fully.
+            </div>
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5>Membership Created</h5>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Member</dt>
+                        <dd class="col-sm-8">{{ membership.member.full_name }}</dd>
+                        <dt class="col-sm-4">Start Date</dt>
+                        <dd class="col-sm-8">{{ membership.start_date|date:'M d, Y' }}</dd>
+                        <dt class="col-sm-4">End Date</dt>
+                        <dd class="col-sm-8">{{ membership.end_date|date:'M d, Y' }}</dd>
+                        <dt class="col-sm-4">Final Amount</dt>
+                        <dd class="col-sm-8">{{ membership.final_amount }}</dd>
+                    </dl>
+                </div>
+            </div>
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5>Invoice</h5>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Invoice Number</dt>
+                        <dd class="col-sm-8"><a href="{% url 'payments:invoice_detail' invoice.pk %}">{{ invoice.invoice_no }}</a></dd>
+                        <dt class="col-sm-4">Total Due</dt>
+                        <dd class="col-sm-8">{{ invoice.balance_amount }}</dd>
+                        <dt class="col-sm-4">Due Date</dt>
+                        <dd class="col-sm-8">{{ invoice.due_date|date:'M d, Y' }}</dd>
+                        <dt class="col-sm-4">Status</dt>
+                        <dd class="col-sm-8"><span class="badge bg-{{ invoice.status_badge_class }}">{{ invoice.get_status_display }}</span></dd>
+                    </dl>
+                </div>
+            </div>
+            {% if order_data %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5>Razorpay Checkout</h5>
+                        <p class="mb-2">A Razorpay payment order is ready for the outstanding balance.</p>
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Order ID</dt>
+                            <dd class="col-sm-8">{{ order_data.id }}</dd>
+                            <dt class="col-sm-4">Amount</dt>
+                            <dd class="col-sm-8">{{ order_data.amount }} {{ order_data.currency }}</dd>
+                        </dl>
+                        <p class="text-muted mt-3">Use the invoice page to complete the checkout or update payment details.</p>
+                    </div>
+                </div>
+            {% elif not gateway_enabled %}
+                <div class="alert alert-info">
+                    Razorpay payment integration is not configured. The membership purchase is recorded and the invoice has been created for manual settlement.
+                </div>
+            {% endif %}
+            <div class="d-flex gap-2">
+                <a href="{% url 'memberships:detail' membership.pk %}" class="btn btn-primary">View Membership</a>
+                <a href="{% url 'payments:invoice_detail' invoice.pk %}" class="btn btn-outline-secondary">View Invoice</a>
+            </div>
+        {% else %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5>Purchase Details</h5>
+                    <form method="post">
+                        {% csrf_token %}
+                        {% if form.errors %}
+                            <div class="alert alert-danger">Please fix the errors below and try again.</div>
+                        {% endif %}
+                        <div class="mb-3">
+                            <label class="form-label">Payment option</label>
+                            {{ form.payment_option }}
+                        </div>
+                        <div class="mb-3">
+                            {{ form.amount_paid.label_tag }}
+                            {{ form.amount_paid }}
+                            <div class="form-text">{{ form.amount_paid.help_text }}</div>
+                        </div>
+                        <div class="mb-3">
+                            {{ form.balance_due_date.label_tag }}
+                            {{ form.balance_due_date }}
+                            <div class="form-text">{{ form.balance_due_date.help_text }}</div>
+                        </div>
+                        <div class="mb-3">
+                            {{ form.remarks.label_tag }}
+                            {{ form.remarks }}
+                            <div class="form-text">{{ form.remarks.help_text }}</div>
+                        </div>
+                        <button type="submit" class="btn btn-success">Confirm Purchase</button>
+                        <a href="{% url 'memberships:plan_detail' plan.pk %}" class="btn btn-link">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
