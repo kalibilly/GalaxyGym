@@ -12,8 +12,12 @@
                 <dl class="row mb-0">
                     <dt class="col-sm-4">Duration</dt>
                     <dd class="col-sm-8">{{ plan.duration_days }} days</dd>
-                    <dt class="col-sm-4">Price</dt>
-                    <dd class="col-sm-8">{{ plan.price }}</dd>
+                    <dt class="col-sm-4">Level</dt>
+                    <dd class="col-sm-8">{{ plan.level }}</dd>
+                    <dt class="col-sm-4">Pricing</dt>
+                    <dd class="col-sm-8">₹{{ plan.price }}</dd>
+                    <dt class="col-sm-4">Payment Rule</dt>
+                    <dd class="col-sm-8">{{ plan.payment_rule_label }}</dd>
                     <dt class="col-sm-4">Status</dt>
                     <dd class="col-sm-8">
                         {% if plan.is_active %}
