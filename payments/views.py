@@ -3,6 +3,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
 from members.models import Member
@@ -44,6 +45,12 @@ class InvoiceCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
     template_name = 'payments/invoice_form.html'
     success_url = reverse_lazy('payments:invoice_list')
     success_message = 'Invoice created successfully.'
+
+    def get_initial(self):
+        initial = super().get_initial()
+        initial['invoice_no'] = Invoice.get_next_invoice_no()
+        initial['invoice_date'] = timezone.localdate()
+        return initial
 
 
 class InvoiceUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
