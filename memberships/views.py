@@ -1,19 +1,18 @@
 from datetime import date, timedelta
 from decimal import Decimal
-import uuid
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.messages.views import SuccessMessageMixin
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q
-from django.shortcuts import get_object_or_404
+from django.db import Q, transaction
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
+from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView, TemplateView
 
+from accounts.models import UserAccount
 from payments.gateway import RazorpayGateway, RazorpayGatewayConfig
-
+from payments.models import Invoice, Payment
 from .forms import MembershipForm, MembershipPlanForm, MembershipPurchaseForm
 from .models import Membership, MembershipPlan
 
@@ -37,20 +36,18 @@ class MembershipPlanListView(LoginRequiredMixin, ListView):
         return context
 
 
-class MembershipPlanCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class MembershipPlanCreateView(LoginRequiredMixin, CreateView):
     model = MembershipPlan
     form_class = MembershipPlanForm
     template_name = 'memberships/plan_form.html'
     success_url = reverse_lazy('memberships:plan_list')
-    success_message = 'Membership plan saved successfully.'
 
 
-class MembershipPlanUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class MembershipPlanUpdateView(LoginRequiredMixin, UpdateView):
     model = MembershipPlan
     form_class = MembershipPlanForm
     template_name = 'memberships/plan_form.html'
     success_url = reverse_lazy('memberships:plan_list')
-    success_message = 'Membership plan updated successfully.'
 
 
 class MembershipPlanDetailView(LoginRequiredMixin, DetailView):
@@ -64,24 +61,47 @@ class MembershipPlanDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
+class MembershipPlanCatalogView(LoginRequiredMixin, ListView):
+    model = MembershipPlan
+    template_name = 'memberships/plan_selection.html'
+    context_object_name = 'plans'
+
+    def dispatch(self, request, *args, **kwargs):
+        member_profile = getattr(request.user, 'member_profile', None)
+        if getattr(request.user, 'role', None) != UserAccount.ROLE_MEMBER or member_profile is None:
+            raise PermissionDenied('Only gym members can access the membership catalog.')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        MembershipPlan.sync_default_plans()
+        return MembershipPlan.objects.filter(is_active=True).order_by('duration_days', 'cardio_included')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['active_membership'] = getattr(self.request.user.member_profile, 'active_membership', None)
+        return context
+
+
 class MembershipPurchaseView(LoginRequiredMixin, FormView):
     template_name = 'memberships/plan_purchase.html'
     form_class = MembershipPurchaseForm
 
     def dispatch(self, request, *args, **kwargs):
         self.plan = get_object_or_404(MembershipPlan, pk=self.kwargs['pk'], is_active=True)
-        if not getattr(request.user, 'member_profile', None):
+        member_profile = getattr(request.user, 'member_profile', None)
+        if getattr(request.user, 'role', None) != UserAccount.ROLE_MEMBER or member_profile is None:
             raise PermissionDenied('Only members can purchase membership plans online.')
         return super().dispatch(request, *args, **kwargs)
 
-    def get_initial(self):
-        initial = super().get_initial()
-        initial['balance_due_date'] = date.today() + timedelta(days=7)
-        return initial
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['plan'] = self.plan
+        return kwargs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['plan'] = self.plan
+        context['current_membership'] = getattr(self.request.user.member_profile, 'active_membership', None)
         context['gateway_enabled'] = self._get_gateway() is not None
         return context
 
@@ -93,63 +113,14 @@ class MembershipPurchaseView(LoginRequiredMixin, FormView):
         config = RazorpayGatewayConfig(api_key=api_key, api_secret=api_secret, test_mode=getattr(settings, 'RAZORPAY_TEST_MODE', True))
         return RazorpayGateway(config)
 
-    def _generate_invoice_no(self):
-        return f'INV-{uuid.uuid4().hex[:8].upper()}'
-
-    def form_valid(self, form):
-        member = self.request.user.member_profile
-        start_date = date.today()
-        end_date = start_date + timedelta(days=self.plan.duration_days)
-
-        membership = Membership.objects.create(
-            member=member,
-            plan=self.plan,
-            start_date=start_date,
-            end_date=end_date,
-            membership_amount=self.plan.price,
-            discount_amount=0,
-            remarks=form.cleaned_data['remarks'],
-        )
-
-        invoice = self._create_invoice(member, membership, form.cleaned_data['balance_due_date'])
-        order_data = self._create_razorpay_order(invoice)
-
-        messages.success(self.request, 'Your membership purchase has been created. Review the invoice to complete payment.')
-
-        context = self.get_context_data(
-            form=form,
-            plan=self.plan,
-            purchase_created=True,
-            membership=membership,
-            invoice=invoice,
-            order_data=order_data,
-        )
-        return self.render_to_response(context)
-
-    def _create_invoice(self, member, membership, balance_due_date):
-        from payments.models import Invoice
-
-        invoice = Invoice.objects.create(
-            invoice_no=self._generate_invoice_no(),
-            member=member,
-            membership=membership,
-            invoice_date=date.today(),
-            due_date=balance_due_date,
-            subtotal=self.plan.price,
-            discount_amount=0,
-            tax_amount=0,
-            remarks=f'Online membership purchase for {self.plan.name}.',
-        )
-        return invoice
-
-    def _create_razorpay_order(self, invoice):
+    def _create_razorpay_order(self, invoice, amount):
         gateway = self._get_gateway()
-        if not gateway or invoice.balance_amount <= 0:
+        if not gateway or amount <= 0:
             return None
 
         try:
             return gateway.create_order(
-                amount_paise=int(Decimal(invoice.balance_amount) * Decimal('100')),
+                amount_paise=int(Decimal(amount) * Decimal('100')),
                 receipt=invoice.invoice_no,
                 notes={
                     'member_id': invoice.member.member_id,
@@ -160,6 +131,75 @@ class MembershipPurchaseView(LoginRequiredMixin, FormView):
         except Exception:
             messages.warning(self.request, 'Could not initialize Razorpay checkout at this time.')
             return None
+
+    def form_valid(self, form):
+        member = self.request.user.member_profile
+        start_date = date.today()
+        end_date = start_date + timedelta(days=self.plan.duration_days)
+        payment_amount = form.cleaned_data['amount_paid']
+
+        with transaction.atomic():
+            membership = Membership.objects.create(
+                member=member,
+                plan=self.plan,
+                start_date=start_date,
+                end_date=end_date,
+                membership_amount=self.plan.price,
+                discount_amount=Decimal('0.00'),
+                remarks=form.cleaned_data.get('remarks', ''),
+            )
+
+            invoice = Invoice.objects.create(
+                invoice_no=self._generate_invoice_no(),
+                member=member,
+                membership=membership,
+                invoice_date=date.today(),
+                due_date=form.cleaned_data['balance_due_date'],
+                subtotal=self.plan.price,
+                discount_amount=Decimal('0.00'),
+                tax_amount=Decimal('0.00'),
+                remarks=f'Online membership purchase for {self.plan.name}.',
+            )
+
+            payment = Payment(
+                invoice=invoice,
+                member=member,
+                payment_date=date.today(),
+                amount_paid=payment_amount,
+                payment_mode=Payment.PAYMENT_ONLINE,
+                transaction_reference='',
+                notes='Initial membership payment',
+            )
+
+            order_data = self._create_razorpay_order(invoice, payment_amount)
+            if order_data is not None:
+                payment.transaction_reference = order_data.get('id', '')
+                payment.notes = 'Initial membership payment via Razorpay order.'
+
+            payment.save()
+            invoice.refresh_balance()
+
+        messages.success(self.request, 'Membership purchase submitted successfully.')
+        return redirect('memberships:purchase_success', invoice_pk=invoice.pk)
+
+    def _generate_invoice_no(self):
+        return f'INV-{date.today().strftime("%Y%m%d")}-{self.plan.duration_days}-{self.plan.cardio_included}'
+
+
+class MembershipPurchaseSuccessView(LoginRequiredMixin, TemplateView):
+    template_name = 'memberships/purchase_success.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        invoice = get_object_or_404(Invoice, pk=self.kwargs['invoice_pk'])
+        member_profile = getattr(self.request.user, 'member_profile', None)
+        if getattr(self.request.user, 'role', None) != UserAccount.ROLE_OWNER and invoice.member != member_profile:
+            raise PermissionDenied('You are not authorized to view this purchase.')
+
+        context['invoice'] = invoice
+        context['membership'] = invoice.membership
+        context['payment'] = invoice.payments.order_by('-payment_date').first()
+        return context
 
 
 class MembershipListView(LoginRequiredMixin, ListView):
@@ -189,20 +229,18 @@ class MembershipListView(LoginRequiredMixin, ListView):
         return context
 
 
-class MembershipCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+class MembershipCreateView(LoginRequiredMixin, CreateView):
     model = Membership
     form_class = MembershipForm
     template_name = 'memberships/membership_form.html'
     success_url = reverse_lazy('memberships:list')
-    success_message = 'Membership assigned successfully.'
 
 
-class MembershipUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+class MembershipUpdateView(LoginRequiredMixin, UpdateView):
     model = Membership
     form_class = MembershipForm
     template_name = 'memberships/membership_form.html'
     success_url = reverse_lazy('memberships:list')
-    success_message = 'Membership updated successfully.'
 
 
 class MembershipDetailView(LoginRequiredMixin, DetailView):
