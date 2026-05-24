@@ -8,6 +8,7 @@
         <div class="card shadow-sm">
             <div class="card-body">
                 <h1 class="h4 mb-3">{% if form.instance.pk %}Edit Invoice{% else %}Create Invoice{% endif %}</h1>
+                <p class="text-muted">Enter the membership start date, select the plan, then save. The invoice number and due date are generated automatically.</p>
                 <form method="post" novalidate>
                     {% csrf_token %}
                     {{ form.non_field_errors }}
