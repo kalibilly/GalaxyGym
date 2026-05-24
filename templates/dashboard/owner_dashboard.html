@@ -53,19 +53,19 @@
                     <p class="text-muted mb-3">Manage gym operations and users:</p>
                     <div class="row g-2">
                         <div class="col-md-6">
-                            <button class="btn btn-outline-light w-100" disabled>Member Analytics</button>
+                            <a href="{% url 'members:create' %}" class="btn btn-outline-light w-100">Add Member</a>
                         </div>
                         <div class="col-md-6">
-                            <button class="btn btn-outline-light w-100" disabled>Revenue Reports</button>
+                            <a href="{% url 'members:list' %}" class="btn btn-outline-light w-100">View Members</a>
                         </div>
                         <div class="col-md-6">
-                            <button class="btn btn-outline-light w-100" disabled>Staff Management</button>
+                            <a href="{% url 'payments:invoice_create' %}" class="btn btn-outline-light w-100">Create Invoice</a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="{% url 'payments:payment_create' %}" class="btn btn-outline-light w-100">Record Payment</a>
                         </div>
                         <div class="col-md-6">
                             <a href="{% url 'admin:index' %}" class="btn btn-primary w-100" target="_blank">Django Admin</a>
-                        </div>
-                        <div class="col-md-6">
-                            <button class="btn btn-outline-light w-100" disabled>Gym Settings</button>
                         </div>
                         <div class="col-md-6">
                             <a href="{% url 'profile' %}" class="btn btn-outline-light w-100">Update Profile</a>
