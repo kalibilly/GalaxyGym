@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block title %}Review Delete Request - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h1 class="h4 mb-3">Review Delete Request</h1>
+                <p class="text-muted">Review the request for <strong>{{ object.member.full_name }}</strong> and choose whether to approve or reject.</p>
+
+                <div class="mb-4">
+                    <h6 class="mb-2">Request details</h6>
+                    <p><strong>Requested By:</strong> {{ object.requested_by.full_name if object.requested_by else 'Unknown' }}</p>
+                    <p><strong>Requested At:</strong> {{ object.requested_at|date:'M d, Y H:i' }}</p>
+                    <p><strong>Reason:</strong> {{ object.reason|linebreaksbr|default:'No reason provided.' }}</p>
+                </div>
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {{ form.non_field_errors }}
+                    <div class="mb-3">
+                        <label class="form-label" for="id_status">Decision</label>
+                        {{ form.status }}
+                        {% for error in form.status.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="id_admin_comments">Owner comments</label>
+                        {{ form.admin_comments }}
+                        {% for error in form.admin_comments.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'members:delete_request_list' %}" class="btn btn-link">Back to requests</a>
+                        <button type="submit" class="btn btn-primary">Save decision</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

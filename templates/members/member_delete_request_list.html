@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Member Requests - Galaxy Gym{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <div>
+                <h1 class="h4 mb-0">Member Delete Requests</h1>
+                <p class="text-muted">Review pending delete requests submitted by reception or staff.</p>
+            </div>
+            <a href="{% url 'members:list' %}" class="btn btn-secondary">Back to Members</a>
+        </div>
+
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Member</th>
+                            <th>Requested By</th>
+                            <th>Requested At</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for request in delete_requests %}
+                            <tr>
+                                <td><a href="{% url 'members:detail' request.member.pk %}">{{ request.member.full_name }}</a></td>
+                                <td>{{ request.requested_by.full_name if request.requested_by else 'Unknown' }}</td>
+                                <td>{{ request.requested_at|date:'M d, Y H:i' }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'warning' if request.status == 'pending' else 'success' if request.status == 'approved' else 'danger' }}">
+                                        {{ request.get_status_display }}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <a href="{% url 'members:delete_request_review' request.pk %}" class="btn btn-sm btn-outline-primary">Review</a>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">No delete requests found.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
