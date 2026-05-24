@@ -30,3 +30,15 @@ class MembershipForm(forms.ModelForm):
             'end_date': forms.DateInput(attrs={'type': 'date'}),
             'remarks': forms.Textarea(attrs={'rows': 3}),
         }
+
+
+class MembershipPurchaseForm(forms.Form):
+    balance_due_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date'}),
+        help_text='When should the outstanding amount be due?'
+    )
+    remarks = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 3}),
+        help_text='Any additional notes for this purchase.',
+    )
