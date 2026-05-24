@@ -325,6 +325,4 @@ class SignupRequestAdmin(admin.ModelAdmin):
 
 
 admin.site.register(UserAccount, UserAccountAdmin)
-admin.site.register(GymIssuedID, GymIssuedIDAdmin)
-admin.site.register(SignupRequest, SignupRequestAdmin)
 
