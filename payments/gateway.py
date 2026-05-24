@@ -1,8 +1,8 @@
 """Payment gateway integration helpers.
 
-This module is intentionally lightweight for future Razorpay integration.
-It should remain separate from invoice/payment business logic so gateway-specific
-behavior can be added cleanly without polluting existing billing models or templates.
+This module keeps Razorpay-specific behavior isolated from invoice and
+membership business logic. The gateway layer may be extended later once the
+Razorpay SDK and credentials are configured.
 """
 
 from dataclasses import dataclass
@@ -20,13 +20,27 @@ class RazorpayGateway:
         self.config = config
 
     def create_order(self, amount_paise: int, currency: str = 'INR', receipt: str = None, notes: dict = None):
-        """Create a Razorpay payment order.
+        """Create a Razorpay payment order."""
+        try:
+            import razorpay
+        except ImportError as exc:
+            raise RuntimeError('Razorpay SDK is not installed.') from exc
 
-        This is a placeholder for future integration. The current application
-        should continue using existing invoice/payment models and forms.
-        """
-        raise NotImplementedError('Razorpay integration is not enabled yet.')
+        client = razorpay.Client(auth=(self.config.api_key, self.config.api_secret))
+        order_payload = {
+            'amount': amount_paise,
+            'currency': currency,
+            'receipt': receipt,
+            'notes': notes or {},
+            'payment_capture': 1,
+        }
+        return client.order.create(order_payload)
 
     def verify_payment_signature(self, payload: dict):
         """Verify a Razorpay payment signature."""
-        raise NotImplementedError('Razorpay integration is not enabled yet.')
+        try:
+            import razorpay
+        except ImportError as exc:
+            raise RuntimeError('Razorpay SDK is not installed.') from exc
+
+        return razorpay.Utility.verify_payment_signature(payload)
