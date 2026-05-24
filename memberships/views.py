@@ -29,6 +29,15 @@ def is_member_user(user):
     return normalize_user_role(user) == UserAccount.ROLE_MEMBER
 
 
+def get_member_profile(user):
+    if not getattr(user, 'is_authenticated', False):
+        return None
+    try:
+        return user.member_profile
+    except Exception:
+        return None
+
+
 class MembershipPlanListView(LoginRequiredMixin, ListView):
     model = MembershipPlan
     template_name = 'memberships/plan_list.html'
@@ -69,7 +78,8 @@ class MembershipPlanDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['can_purchase'] = getattr(self.request.user, 'member_profile', None) is not None and self.object.is_active
+        member_profile = get_member_profile(self.request.user)
+        context['can_purchase'] = member_profile is not None and self.object.is_active
         return context
 
 
@@ -89,7 +99,8 @@ class MembershipPlanCatalogView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['active_membership'] = getattr(self.request.user.member_profile, 'active_membership', None)
+        member_profile = get_member_profile(self.request.user)
+        context['active_membership'] = getattr(member_profile, 'active_membership', None) if member_profile else None
         return context
 
 
@@ -99,8 +110,8 @@ class MembershipPurchaseView(LoginRequiredMixin, FormView):
 
     def dispatch(self, request, *args, **kwargs):
         self.plan = get_object_or_404(MembershipPlan, pk=self.kwargs['pk'], is_active=True)
-        member_profile = getattr(request.user, 'member_profile', None)
-        if not is_member_user(request.user) or member_profile is None:
+        self.member_profile = get_member_profile(request.user)
+        if not is_member_user(request.user) or self.member_profile is None:
             raise PermissionDenied('Only members can purchase membership plans online.')
         return super().dispatch(request, *args, **kwargs)
 
@@ -112,7 +123,7 @@ class MembershipPurchaseView(LoginRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['plan'] = self.plan
-        context['current_membership'] = getattr(self.request.user.member_profile, 'active_membership', None)
+        context['current_membership'] = getattr(self.member_profile, 'active_membership', None) if self.member_profile else None
         context['gateway_enabled'] = self._get_gateway() is not None
         return context
 
@@ -121,7 +132,11 @@ class MembershipPurchaseView(LoginRequiredMixin, FormView):
         api_secret = getattr(settings, 'RAZORPAY_API_SECRET', None)
         if not api_key or not api_secret:
             return None
-        config = RazorpayGatewayConfig(api_key=api_key, api_secret=api_secret, test_mode=getattr(settings, 'RAZORPAY_TEST_MODE', True))
+        config = RazorpayGatewayConfig(
+            api_key=api_key,
+            api_secret=api_secret,
+            test_mode=getattr(settings, 'RAZORPAY_TEST_MODE', True),
+        )
         return RazorpayGateway(config)
 
     def _create_razorpay_order(self, invoice, amount):
@@ -144,7 +159,10 @@ class MembershipPurchaseView(LoginRequiredMixin, FormView):
             return None
 
     def form_valid(self, form):
-        member = self.request.user.member_profile
+        member = self.member_profile
+        if member is None:
+            raise PermissionDenied('Member profile not found for this account.')
+
         start_date = date.today()
         end_date = start_date + timedelta(days=self.plan.duration_days)
         payment_amount = form.cleaned_data['amount_paid']
@@ -203,9 +221,11 @@ class MembershipPurchaseSuccessView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         invoice = get_object_or_404(Invoice, pk=self.kwargs['invoice_pk'])
-        member_profile = getattr(self.request.user, 'member_profile', None)
+        member_profile = get_member_profile(self.request.user)
+
         if not is_member_user(self.request.user) and normalize_user_role(self.request.user) != UserAccount.ROLE_OWNER:
             raise PermissionDenied('You are not authorized to view this purchase.')
+
         if normalize_user_role(self.request.user) != UserAccount.ROLE_OWNER and invoice.member != member_profile:
             raise PermissionDenied('You are not authorized to view this purchase.')
 
