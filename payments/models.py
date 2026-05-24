@@ -1,3 +1,7 @@
+import re
+from datetime import timedelta
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -16,6 +20,16 @@ class Invoice(TimeStampedModel):
         (STATUS_PARTIAL, 'Partial'),
         (STATUS_PAID, 'Paid'),
         (STATUS_OVERDUE, 'Overdue'),
+    ]
+
+    PAYMENT_STATUS_PAID = 'paid'
+    PAYMENT_STATUS_PENDING = 'pending'
+    PAYMENT_STATUS_NOT_PAID = 'not_paid'
+
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_STATUS_PAID, 'Paid'),
+        (PAYMENT_STATUS_PENDING, 'Pending'),
+        (PAYMENT_STATUS_NOT_PAID, 'Not Paid'),
     ]
 
     invoice_no = models.CharField(max_length=32, unique=True)
@@ -39,6 +53,11 @@ class Invoice(TimeStampedModel):
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     balance_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    pending_payment_status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default=PAYMENT_STATUS_PENDING,
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_UNPAID)
     remarks = models.TextField(blank=True)
 
@@ -58,20 +77,35 @@ class Invoice(TimeStampedModel):
             self.STATUS_OVERDUE: 'danger',
         }.get(self.status, 'secondary')
 
+    @property
+    def membership_end_date(self):
+        return self.membership.end_date if self.membership else None
+
+    @classmethod
+    def get_next_invoice_no(cls):
+        prefix = 'INV-'
+        latest = cls.objects.order_by('-invoice_no').first()
+        if not latest or not latest.invoice_no:
+            return f'{prefix}0001'
+
+        match = re.search(r'(\d+)$', latest.invoice_no)
+        if not match:
+            return f'{prefix}0001'
+
+        next_number = int(match.group(1)) + 1
+        return f'{prefix}{next_number:04d}'
+
     def clean(self):
         if self.due_date < self.invoice_date:
             raise ValidationError('Invoice due date cannot be earlier than the invoice date.')
-        if self.subtotal < 0 or self.discount_amount < 0 or self.tax_amount < 0:
+        if self.balance_amount < 0 or self.paid_amount < 0 or self.total_amount < 0:
             raise ValidationError('Invoice amounts cannot be negative.')
 
     def get_paid_amount(self):
         if not self.pk:
             return self.paid_amount
         total = self.payments.aggregate(total=models.Sum('amount_paid'))['total']
-        return total or 0
-
-    def get_balance_amount(self):
-        return self.total_amount - self.get_paid_amount()
+        return total or Decimal('0.00')
 
     def derive_status(self):
         if self.total_amount <= 0:
@@ -83,7 +117,10 @@ class Invoice(TimeStampedModel):
 
         if balance <= 0:
             return self.STATUS_PAID
-        if self.due_date < today:
+
+        if self.pending_payment_status == self.PAYMENT_STATUS_PAID:
+            return self.STATUS_PAID
+        if self.pending_payment_status == self.PAYMENT_STATUS_NOT_PAID and self.due_date < today:
             return self.STATUS_OVERDUE
         if paid > 0:
             return self.STATUS_PARTIAL
@@ -96,10 +133,23 @@ class Invoice(TimeStampedModel):
         self.save(update_fields=['paid_amount', 'balance_amount', 'status'])
 
     def save(self, *args, **kwargs):
-        self.clean()
-        self.total_amount = max(self.subtotal + self.tax_amount - self.discount_amount, 0)
-        if self.pk:
+        if not self.invoice_no:
+            self.invoice_no = self.get_next_invoice_no()
+        if self.invoice_date:
+            self.due_date = self.invoice_date + timedelta(days=7)
+
+        self.subtotal = self.balance_amount or Decimal('0.00')
+        self.discount_amount = Decimal('0.00')
+        self.tax_amount = Decimal('0.00')
+
+        if self.pk and self.payments.exists():
             self.paid_amount = self.get_paid_amount()
+            self.total_amount = self.paid_amount + self.balance_amount
+            self.subtotal = self.total_amount
+        else:
+            self.total_amount = max(self.subtotal + self.tax_amount - self.discount_amount, Decimal('0.00'))
+            self.paid_amount = self.get_paid_amount()
+
         self.balance_amount = self.total_amount - self.paid_amount
         self.status = self.derive_status()
         super().save(*args, **kwargs)
