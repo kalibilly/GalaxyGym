@@ -22,6 +22,10 @@
                     <dd class="col-sm-8">{{ member.email|default:'—' }}</dd>
                     <dt class="col-sm-4">Status</dt>
                     <dd class="col-sm-8">{{ member.get_status_display }}</dd>
+                    <dt class="col-sm-4">Created By</dt>
+                    <dd class="col-sm-8">{{ member.created_by.full_name if member.created_by else 'System' }}</dd>
+                    <dt class="col-sm-4">Updated By</dt>
+                    <dd class="col-sm-8">{{ member.updated_by.full_name if member.updated_by else 'System' }}</dd>
                     <dt class="col-sm-4">Joined</dt>
                     <dd class="col-sm-8">{{ member.date_of_joining|date:'M d, Y' }}</dd>
                     <dt class="col-sm-4">Assigned Staff</dt>
@@ -116,7 +120,16 @@
         </div>
 
         <div class="d-flex justify-content-between">
-            <a href="{% url 'members:update' member.pk %}" class="btn btn-primary">Edit Member</a>
+            <div>
+                <a href="{% url 'members:update' member.pk %}" class="btn btn-primary">Edit Member</a>
+                {% if user.role == 'staff' or user.role == 'owner' %}
+                    {% if not delete_request or delete_request.status != 'pending' %}
+                        <a href="{% url 'members:request_delete' member.pk %}" class="btn btn-outline-danger ms-2">Request Delete</a>
+                    {% else %}
+                        <span class="badge bg-warning text-dark ms-2">Delete request pending</span>
+                    {% endif %}
+                {% endif %}
+            </div>
             <a href="{% url 'members:list' %}" class="btn btn-link">Back to members</a>
         </div>
     </div>
