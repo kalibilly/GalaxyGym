@@ -29,9 +29,6 @@
                 </dl>
             </div>
         </div>
-        {% if can_purchase %}
-            <a href="{% url 'memberships:plan_purchase' plan.pk %}" class="btn btn-success me-2">Purchase Plan</a>
-        {% endif %}
         <a href="{% url 'memberships:plan_update' plan.pk %}" class="btn btn-primary">Edit Plan</a>
         <a href="{% url 'memberships:plan_list' %}" class="btn btn-link">Back to plans</a>
     </div>
