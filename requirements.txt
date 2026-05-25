@@ -13,7 +13,8 @@ uvicorn==0.40.0
 whitenoise>=6.6.0
 setuptools>=75.0.0
 wheel>=0.44.0
-psycopg2==2.9.12
+psycopg==3.2.13
+psycopg-binary==3.2.13
 dj-database-url==2.1.0
 python-json-logger>=2.0.0
 
