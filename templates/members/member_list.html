@@ -54,9 +54,21 @@
                     <td>{{ member.member_id }}</td>
                     <td><a href="{% url 'members:detail' member.pk %}">{{ member.full_name }}</a></td>
                     <td>{{ member.phone_number }}</td>
-                    <td>{{ member.assigned_staff.full_name if member.assigned_staff else '—' }}</td>
                     <td>
-                        <span class="badge bg-{{ 'success' if member.status == 'active' else 'secondary' if member.status == 'inactive' else 'warning' }}">{{ member.get_status_display }}</span>
+                        {% if member.assigned_staff %}
+                            {{ member.assigned_staff.full_name }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if member.status == 'active' %}
+                            <span class="badge bg-success">{{ member.get_status_display }}</span>
+                        {% elif member.status == 'inactive' %}
+                            <span class="badge bg-secondary">{{ member.get_status_display }}</span>
+                        {% else %}
+                            <span class="badge bg-warning">{{ member.get_status_display }}</span>
+                        {% endif %}
                     </td>
                     <td class="text-end">
                         <a href="{% url 'members:update' member.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
@@ -70,6 +82,7 @@
         </tbody>
     </table>
 </div>
+
 {% if is_paginated %}
 <nav aria-label="Member pagination">
     <ul class="pagination justify-content-center">
@@ -80,7 +93,11 @@
         {% else %}
             <li class="page-item disabled"><span class="page-link">Previous</span></li>
         {% endif %}
-        <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+
+        <li class="page-item disabled">
+            <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        </li>
+
         {% if page_obj.has_next %}
             <li class="page-item">
                 <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if staff_id %}staff={{ staff_id }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
