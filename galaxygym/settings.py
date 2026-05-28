@@ -17,7 +17,7 @@ if IS_PRODUCTION and not SECRET_KEY:
 DEBUG = False
 
 ALLOWED_HOSTS = [
-    'galaxy-gym.onrender.com',
+    'galaxygym.onrender.com',
 ]
 
 INSTALLED_APPS = [
