@@ -1,13 +1,25 @@
+import json
+import logging
+import xml.etree.ElementTree as ET
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DetailView, ListView, UpdateView
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from accounts.models import UserAccount
+from members.models import Member
+from staffs.models import Staff
 from .forms import AttendanceLogForm
 from .models import AttendanceLog
+
+logger = logging.getLogger('biometric')
 
 
 class AttendanceAccessMixin(LoginRequiredMixin):
@@ -108,8 +120,6 @@ class AttendanceDetailView(AttendanceAccessMixin, DetailView):
         return self.ensure_attendance_access(attendance)
 
 
-from members.models import Member
-from staffs.models import Staff
 
 
 class MemberAttendanceHistoryView(AttendanceAccessMixin, DetailView):
@@ -131,6 +141,152 @@ class MemberAttendanceHistoryView(AttendanceAccessMixin, DetailView):
         context['attendance_list'] = member.attendance_logs.order_by('-check_in_time')[:20]
         return context
 
+def extract_headers(request):
+    headers = {}
+    for key, value in request.META.items():
+        if key.startswith('HTTP_') or key in ('CONTENT_TYPE', 'CONTENT_LENGTH'):
+            headers[key] = value
+    return headers
+
+
+def parse_xml(raw_body):
+    parsed = {}
+    if not raw_body or not raw_body.strip().startswith('<'):
+        return parsed
+    try:
+        root = ET.fromstring(raw_body)
+        for element in root.iter():
+            if element.text and element.tag:
+                parsed[element.tag.lower()] = element.text.strip()
+    except ET.ParseError:
+        logger.warning('Failed to parse XML biometric payload.')
+    return parsed
+
+
+def extract_device_user_id(post_data, xml_fields, query_data):
+    candidate_fields = [
+        'pin',
+        'uid',
+        'userid',
+        'user_id',
+        'code',
+        'sn',
+        'id',
+    ]
+    for field in candidate_fields:
+        for source in (post_data, xml_fields, query_data):
+            if source.get(field):
+                return str(source.get(field)).strip()
+    return None
+
+
+def render_device_response(request, status_text='OK'):
+    raw_body = request.body.decode('utf-8', errors='ignore')
+    if 'xml' in (request.content_type or '') or raw_body.strip().startswith('<'):
+        return HttpResponse(f'<Response>{status_text}</Response>', content_type='application/xml')
+    return HttpResponse(status_text, content_type='text/plain')
+
+
+def get_device_target(device_user_id):
+    if not device_user_id:
+        return None
+    target = Member.objects.filter(device_user_id=device_user_id).select_related('user').first()
+    if target:
+        return target
+    target = Staff.objects.filter(device_user_id=device_user_id).select_related('user').first()
+    if target:
+        return target
+    target = Member.objects.filter(member_id=device_user_id).select_related('user').first()
+    if target:
+        return target
+    target = Staff.objects.filter(staff_id=device_user_id).select_related('user').first()
+    if target:
+        return target
+    return None
+
+
+def deny_expired_member(target):
+    if isinstance(target, Member):
+        target.status = Member.STATUS_INACTIVE
+        target.save(update_fields=['status'])
+        if target.user:
+            target.user.is_active = False
+            target.user.save(update_fields=['is_active'])
+
+
+def log_biometric_request(request, payload):
+    logger.info(
+        'Biometric request received: %s',
+        json.dumps(payload, default=str),
+    )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(require_http_methods(['GET', 'POST']), name='dispatch')
+class BiometricEndpointView(View):
+    def post(self, request, *args, **kwargs):
+        return self.handle_request(request)
+
+    def get(self, request, *args, **kwargs):
+        return self.handle_request(request)
+
+    def handle_request(self, request):
+        raw_body = request.body.decode('utf-8', errors='ignore')
+        headers = extract_headers(request)
+        post_data = request.POST.dict()
+        query_data = request.GET.dict()
+        xml_fields = parse_xml(raw_body)
+        json_payload = None
+        if 'json' in (request.content_type or '') and raw_body:
+            try:
+                json_payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                json_payload = None
+
+        payload = {
+            'method': request.method,
+            'path': request.path,
+            'headers': headers,
+            'raw_body': raw_body,
+            'post_data': post_data,
+            'query_data': query_data,
+            'xml_fields': xml_fields,
+            'json_payload': json_payload,
+        }
+        log_biometric_request(request, payload)
+
+        device_user_id = extract_device_user_id(post_data, xml_fields, query_data)
+        target = get_device_target(device_user_id)
+        if not target:
+            logger.warning('Biometric request could not match any Member or Staff for device_user_id=%s', device_user_id)
+            return render_device_response(request, status_text='ERR_USER_NOT_FOUND')
+
+        active_membership = None
+        allow_access = True
+        if isinstance(target, Member):
+            active_membership = target.active_membership
+            allow_access = bool(active_membership and active_membership.status == active_membership.STATUS_ACTIVE)
+            if not allow_access:
+                deny_expired_member(target)
+
+        if allow_access:
+            attendance = AttendanceLog.objects.create(
+                member=target if isinstance(target, Member) else None,
+                staff=target if isinstance(target, Staff) else None,
+                source=AttendanceLog.SOURCE_DEVICE,
+                verification_mode=AttendanceLog.VERIFICATION_BIOMETRIC,
+                device_id=request.path,
+                status=AttendanceLog.STATUS_PRESENT,
+                remarks=f'Biometric attendance from device_user_id={device_user_id}',
+            )
+            logger.info('Created biometric attendance record %s for device_user_id=%s', attendance.pk, device_user_id)
+            return render_device_response(request, status_text='OK')
+
+        logger.info('Denied biometric access for device_user_id=%s due to expired membership', device_user_id)
+        return render_device_response(request, status_text='DENY')
+
+
+biometric_endpoint = BiometricEndpointView.as_view()
 
 class StaffAttendanceHistoryView(AttendanceAccessMixin, DetailView):
     model = Staff
