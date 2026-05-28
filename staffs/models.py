@@ -23,6 +23,7 @@ class Staff(TimeStampedModel, ActiveStatusModel):
         related_name='staff_profile',
     )
     staff_id = models.CharField(max_length=24, unique=True)
+    device_user_id = models.CharField(max_length=64, unique=True, null=True, blank=True)
     full_name = models.CharField(max_length=150)
     phone_number = models.CharField(max_length=20, validators=[phone_regex])
     email = models.EmailField(blank=True)
