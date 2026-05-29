@@ -29,6 +29,7 @@ class InvoiceListView(LoginRequiredMixin, ListView):
                 Q(invoice_no__icontains=query)
                 | Q(member__full_name__icontains=query)
                 | Q(member__member_id__icontains=query)
+                | Q(member__phone_number__icontains=query)
             )
         return queryset
 
@@ -83,6 +84,7 @@ class PaymentListView(LoginRequiredMixin, ListView):
             queryset = queryset.filter(
                 Q(member__full_name__icontains=query)
                 | Q(member__member_id__icontains=query)
+                | Q(member__phone_number__icontains=query)
                 | Q(invoice__invoice_no__icontains=query)
                 | Q(transaction_reference__icontains=query)
             )
