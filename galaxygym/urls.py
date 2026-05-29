@@ -4,8 +4,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from attendance.views import biometric_endpoint
+from core.views import HomeView
 
 urlpatterns = [
+    path('api/attendance/', include('attendance.api_urls', namespace='attendance_api')),
     path('admin/', admin.site.urls),
     path('api/biometric/', biometric_endpoint, name='api_biometric'),
     path('iclock/cdata', biometric_endpoint, name='iclock_cdata'),
@@ -20,7 +22,7 @@ urlpatterns = [
     path('payments/', include('payments.urls')),
     path('attendance/', include('attendance.urls')),
     path('notifications/', include('notifications.urls')),
-    path('', lambda request: __import__('django.shortcuts', fromlist=['redirect']).redirect('dashboard')),
+    path('', HomeView.as_view(), name='home'),
 ]
 
 if settings.DEBUG:
