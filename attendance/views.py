@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
@@ -18,6 +18,7 @@ from members.models import Member
 from staffs.models import Staff
 from .forms import AttendanceLogForm
 from .models import AttendanceLog
+from .services import AccessDecisionError, create_attendance_attempt, evaluate_member_access, evaluate_staff_access
 
 logger = logging.getLogger('biometric')
 
@@ -214,6 +215,116 @@ def deny_expired_member(target):
             target.user.save(update_fields=['is_active'])
 
 
+@require_http_methods(['GET', 'POST'])
+def bridge_entry(request):
+    try:
+        payload = json.loads(request.body or '{}') if request.content_type and 'json' in request.content_type else request.POST.dict()
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON payload.'}, status=400)
+
+    member_id = payload.get('member_id') or payload.get('user_id')
+    staff_id = payload.get('staff_id')
+    member_name = payload.get('member_name') or payload.get('name')
+    staff_name = payload.get('staff_name')
+    entry_time = payload.get('entry_time') or payload.get('check_in_time')
+
+    if member_id:
+        member = Member.objects.filter(member_id=member_id).select_related('user').first()
+        if not member:
+            return JsonResponse({'ok': False, 'error': 'Unknown member_id.'}, status=404)
+
+        decision = evaluate_member_access(member)
+        attendance, duplicate = create_attendance_attempt(
+            'member',
+            member,
+            source=AttendanceLog.SOURCE_DEVICE,
+            verification_mode=AttendanceLog.VERIFICATION_DEVICE,
+            device_id=payload.get('device_id', 'bridge'),
+            remarks='Bridge attendance attempt' if decision['gym_access'] else 'Bridge access denied by software rules',
+            status=AttendanceLog.STATUS_PRESENT if decision['gym_access'] else AttendanceLog.STATUS_ABSENT,
+        )
+        return JsonResponse({
+            'ok': True,
+            'user_type': 'member',
+            'member_id': member.member_id,
+            'member_name': member.full_name,
+            'entry_time': entry_time,
+            'gym_access': decision['gym_access'],
+            'attendance_created': attendance is not None,
+            'duplicate_daily_attendance': duplicate,
+            'reason': decision.get('reason'),
+        })
+
+    if staff_id:
+        staff = Staff.objects.filter(staff_id=staff_id).select_related('user').first()
+        if not staff:
+            return JsonResponse({'ok': False, 'error': 'Unknown staff_id.'}, status=404)
+
+        decision = evaluate_staff_access(staff)
+        attendance, duplicate = create_attendance_attempt(
+            'staff',
+            staff,
+            source=AttendanceLog.SOURCE_DEVICE,
+            verification_mode=AttendanceLog.VERIFICATION_DEVICE,
+            device_id=payload.get('device_id', 'bridge'),
+            remarks='Bridge attendance attempt' if decision['is_staff_active'] else 'Bridge staff access denied by software rules',
+            status=AttendanceLog.STATUS_PRESENT if decision['is_staff_active'] else AttendanceLog.STATUS_ABSENT,
+        )
+        return JsonResponse({
+            'ok': True,
+            'user_type': 'staff',
+            'staff_id': staff.staff_id,
+            'staff_name': staff.full_name,
+            'entry_time': entry_time,
+            'is_staff_active': decision['is_staff_active'],
+            'attendance_created': attendance is not None,
+            'duplicate_daily_attendance': duplicate,
+            'reason': decision.get('reason'),
+        })
+
+    return JsonResponse({'ok': False, 'error': 'Provide member_id or staff_id.'}, status=400)
+
+
+@require_http_methods(['GET', 'POST'])
+def access_sync(request):
+    try:
+        payload = json.loads(request.body or '{}') if request.content_type and 'json' in request.content_type else request.POST.dict()
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON payload.'}, status=400)
+
+    member_id = payload.get('member_id')
+    staff_id = payload.get('staff_id')
+
+    if member_id:
+        member = Member.objects.filter(member_id=member_id).select_related('user').first()
+        if not member:
+            return JsonResponse({'ok': False, 'error': 'Unknown member_id.'}, status=404)
+        decision = evaluate_member_access(member)
+        return JsonResponse({
+            'ok': True,
+            'user_type': 'member',
+            'member_id': member.member_id,
+            'member_name': member.full_name,
+            'gym_access': decision['gym_access'],
+            'reason': decision.get('reason'),
+        })
+
+    if staff_id:
+        staff = Staff.objects.filter(staff_id=staff_id).select_related('user').first()
+        if not staff:
+            return JsonResponse({'ok': False, 'error': 'Unknown staff_id.'}, status=404)
+        decision = evaluate_staff_access(staff)
+        return JsonResponse({
+            'ok': True,
+            'user_type': 'staff',
+            'staff_id': staff.staff_id,
+            'staff_name': staff.full_name,
+            'is_staff_active': decision['is_staff_active'],
+            'reason': decision.get('reason'),
+        })
+
+    return JsonResponse({'ok': False, 'error': 'Provide member_id or staff_id.'}, status=400)
+
 def log_biometric_request(request, payload):
     logger.info(
         'Biometric request received: %s',
@@ -261,28 +372,68 @@ class BiometricEndpointView(View):
             logger.warning('Biometric request could not match any Member or Staff for device_user_id=%s', device_user_id)
             return render_device_response(request, status_text='ERR_USER_NOT_FOUND')
 
-        active_membership = None
-        allow_access = True
         if isinstance(target, Member):
-            active_membership = target.active_membership
-            allow_access = bool(active_membership and active_membership.status == active_membership.STATUS_ACTIVE)
-            if not allow_access:
+            decision = evaluate_member_access(target)
+            if not decision['gym_access']:
                 deny_expired_member(target)
+                attendance, duplicate = create_attendance_attempt(
+                    'member',
+                    target,
+                    source=AttendanceLog.SOURCE_DEVICE,
+                    verification_mode=AttendanceLog.VERIFICATION_BIOMETRIC,
+                    device_id=request.path,
+                    remarks=f'Access denied by software rules for device_user_id={device_user_id}: {decision.get("reason")}',
+                    status=AttendanceLog.STATUS_ABSENT,
+                )
+                logger.info('Denied biometric access for device_user_id=%s: %s', device_user_id, decision.get('reason'))
+                return render_device_response(request, status_text='DENY')
 
-        if allow_access:
-            attendance = AttendanceLog.objects.create(
-                member=target if isinstance(target, Member) else None,
-                staff=target if isinstance(target, Staff) else None,
+            attendance, duplicate = create_attendance_attempt(
+                'member',
+                target,
                 source=AttendanceLog.SOURCE_DEVICE,
                 verification_mode=AttendanceLog.VERIFICATION_BIOMETRIC,
                 device_id=request.path,
-                status=AttendanceLog.STATUS_PRESENT,
                 remarks=f'Biometric attendance from device_user_id={device_user_id}',
+                status=AttendanceLog.STATUS_PRESENT,
             )
-            logger.info('Created biometric attendance record %s for device_user_id=%s', attendance.pk, device_user_id)
+            if attendance:
+                logger.info('Created biometric attendance record %s for device_user_id=%s', attendance.pk, device_user_id)
+            else:
+                logger.info('Skipped duplicate biometric attendance for device_user_id=%s', device_user_id)
             return render_device_response(request, status_text='OK')
 
-        logger.info('Denied biometric access for device_user_id=%s due to expired membership', device_user_id)
+        if isinstance(target, Staff):
+            decision = evaluate_staff_access(target)
+            if not decision['is_staff_active']:
+                attendance, duplicate = create_attendance_attempt(
+                    'staff',
+                    target,
+                    source=AttendanceLog.SOURCE_DEVICE,
+                    verification_mode=AttendanceLog.VERIFICATION_BIOMETRIC,
+                    device_id=request.path,
+                    remarks=f'Access denied by software rules for device_user_id={device_user_id}: {decision.get("reason")}',
+                    status=AttendanceLog.STATUS_ABSENT,
+                )
+                logger.info('Denied biometric staff access for device_user_id=%s: %s', device_user_id, decision.get('reason'))
+                return render_device_response(request, status_text='DENY')
+
+            attendance, duplicate = create_attendance_attempt(
+                'staff',
+                target,
+                source=AttendanceLog.SOURCE_DEVICE,
+                verification_mode=AttendanceLog.VERIFICATION_BIOMETRIC,
+                device_id=request.path,
+                remarks=f'Biometric attendance from device_user_id={device_user_id}',
+                status=AttendanceLog.STATUS_PRESENT,
+            )
+            if attendance:
+                logger.info('Created biometric attendance record %s for device_user_id=%s', attendance.pk, device_user_id)
+            else:
+                logger.info('Skipped duplicate biometric attendance for device_user_id=%s', device_user_id)
+            return render_device_response(request, status_text='OK')
+
+        logger.info('Denied biometric access for device_user_id=%s due to unknown target type', device_user_id)
         return render_device_response(request, status_text='DENY')
 
 
