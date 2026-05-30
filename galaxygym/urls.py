@@ -3,13 +3,14 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
-from attendance.views import biometric_endpoint
+from attendance.views import biometric_endpoint, biometric_get_request
 from core.views import HomeView
 
 urlpatterns = [
     path('api/attendance/', include('attendance.api_urls', namespace='attendance_api')),
     path('admin/', admin.site.urls),
     path('api/biometric/', biometric_endpoint, name='api_biometric'),
+    path('iclock/getrequest', biometric_get_request, name='iclock_getrequest'),
     path('iclock/cdata', biometric_endpoint, name='iclock_cdata'),
     path('cdata', biometric_endpoint, name='cdata'),
     path('iWsService', biometric_endpoint, name='iws_service'),
