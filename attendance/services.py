@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.db.models import Q
+from django.utils import timezone
 
 from .models import AttendanceLog
 
@@ -105,18 +106,20 @@ def evaluate_staff_access(staff):
     }
 
 
-def has_daily_attendance_for_user(user_type, user):
+def has_daily_attendance_for_user(user_type, user, for_date=None):
     if not user:
         return False
 
-    lookup = Q(date=date.today())
+    attendance_date = for_date or date.today()
+    lookup = Q(date=attendance_date)
     if user_type == 'member':
         return AttendanceLog.objects.filter(member=user).filter(lookup).exists()
     return AttendanceLog.objects.filter(staff=user).filter(lookup).exists()
 
 
-def create_attendance_attempt(user_type, user, *, source, verification_mode, device_id, remarks, status='present'):
-    if has_daily_attendance_for_user(user_type, user):
+def create_attendance_attempt(user_type, user, *, source, verification_mode, device_id, remarks, status='present', check_in_time=None):
+    attendance_date = check_in_time.date() if check_in_time else date.today()
+    if has_daily_attendance_for_user(user_type, user, for_date=attendance_date):
         return None, True
 
     attendance = AttendanceLog.objects.create(
@@ -127,5 +130,7 @@ def create_attendance_attempt(user_type, user, *, source, verification_mode, dev
         device_id=device_id,
         status=status,
         remarks=remarks,
+        check_in_time=check_in_time if check_in_time else timezone.localtime(),
+        date=attendance_date,
     )
     return attendance, False
