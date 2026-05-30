@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AttendanceLog
+from .models import AttendanceLog, BiometricDevice
 
 
 @admin.register(AttendanceLog)
@@ -20,3 +20,10 @@ class AttendanceLogAdmin(admin.ModelAdmin):
     search_fields = ('member__full_name', 'member__member_id', 'staff__full_name', 'staff__staff_id', 'device_id')
     readonly_fields = ('created_at', 'updated_at')
     raw_id_fields = ('member', 'staff')
+
+
+@admin.register(BiometricDevice)
+class BiometricDeviceAdmin(admin.ModelAdmin):
+    list_display = ('serial_number', 'device_name', 'is_active', 'last_seen_at')
+    search_fields = ('serial_number', 'device_name')
+    readonly_fields = ('last_seen_at',)
