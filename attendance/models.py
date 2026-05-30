@@ -100,3 +100,19 @@ class AttendanceLog(TimeStampedModel):
         if not self.date and self.check_in_time:
             self.date = self.check_in_time.date()
         super().save(*args, **kwargs)
+
+
+class BiometricDevice(TimeStampedModel):
+    serial_number = models.CharField(max_length=64, unique=True)
+    device_name = models.CharField(max_length=128, blank=True)
+    is_active = models.BooleanField(default=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    last_payload = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = 'Biometric Device'
+        verbose_name_plural = 'Biometric Devices'
+
+    def __str__(self):
+        return self.device_name or self.serial_number
