@@ -193,7 +193,9 @@ def parse_plain_text_rows(raw_body):
             index += 1
         if parsed_line:
             rows.append(parsed_line)
-    return rows
+        logger.debug('parse_plain_text_rows parsed %d rows: %s', len(rows), rows)
+        return rows
+    
 
 
 def extract_device_user_id(*sources):
@@ -254,19 +256,32 @@ def render_device_response(request, status_text='OK'):
 
 def get_device_target(device_user_id):
     if not device_user_id:
+        logger.debug('get_device_target called with empty device_user_id')
         return None
+
+    # Try device_user_id mapping first
     target = Member.objects.filter(device_user_id=device_user_id).select_related('user').first()
     if target:
+        logger.debug('Found Member by device_user_id=%s -> member_id=%s', device_user_id, target.member_id)
         return target
+
     target = Staff.objects.filter(device_user_id=device_user_id).select_related('user').first()
     if target:
+        logger.debug('Found Staff by device_user_id=%s -> staff_id=%s', device_user_id, target.staff_id)
         return target
+
+    # Try member_id/staff_id fallback
     target = Member.objects.filter(member_id=device_user_id).select_related('user').first()
     if target:
+        logger.debug('Found Member by member_id=%s', device_user_id)
         return target
+
     target = Staff.objects.filter(staff_id=device_user_id).select_related('user').first()
     if target:
+        logger.debug('Found Staff by staff_id=%s', device_user_id)
         return target
+
+    logger.debug('No Member/Staff matched for device_user_id=%s', device_user_id)
     return None
 
 
@@ -329,6 +344,7 @@ def dispatch_biometric_request(request, payload, device_user_id, device_serial, 
                 source=AttendanceLog.SOURCE_DEVICE,
                 verification_mode=AttendanceLog.VERIFICATION_BIOMETRIC,
                 device_id=device_serial or request.path,
+                device_user_id=device_user_id,
                 remarks=f'Access denied by software rules for device_user_id={device_user_id}: {decision.get("reason")}',
                 status=AttendanceLog.STATUS_ABSENT,
                 check_in_time=device_timestamp,
@@ -342,6 +358,7 @@ def dispatch_biometric_request(request, payload, device_user_id, device_serial, 
             source=AttendanceLog.SOURCE_DEVICE,
             verification_mode=AttendanceLog.VERIFICATION_BIOMETRIC,
             device_id=device_serial or request.path,
+            device_user_id=device_user_id,
             remarks=f'Biometric attendance from device_user_id={device_user_id}',
             status=AttendanceLog.STATUS_PRESENT,
             check_in_time=device_timestamp,
@@ -361,6 +378,7 @@ def dispatch_biometric_request(request, payload, device_user_id, device_serial, 
                 source=AttendanceLog.SOURCE_DEVICE,
                 verification_mode=AttendanceLog.VERIFICATION_BIOMETRIC,
                 device_id=device_serial or request.path,
+                device_user_id=device_user_id,
                 remarks=f'Access denied by software rules for device_user_id={device_user_id}: {decision.get("reason")}',
                 status=AttendanceLog.STATUS_ABSENT,
                 check_in_time=device_timestamp,
@@ -374,6 +392,7 @@ def dispatch_biometric_request(request, payload, device_user_id, device_serial, 
             source=AttendanceLog.SOURCE_DEVICE,
             verification_mode=AttendanceLog.VERIFICATION_BIOMETRIC,
             device_id=device_serial or request.path,
+            device_user_id=device_user_id,
             remarks=f'Biometric attendance from device_user_id={device_user_id}',
             status=AttendanceLog.STATUS_PRESENT,
             check_in_time=device_timestamp,
@@ -447,6 +466,7 @@ def bridge_entry(request):
             source=AttendanceLog.SOURCE_DEVICE,
             verification_mode=AttendanceLog.VERIFICATION_DEVICE,
             device_id=payload.get('device_id', 'bridge'),
+            device_user_id=member_id,
             remarks='Bridge attendance attempt' if decision['gym_access'] else 'Bridge access denied by software rules',
             status=AttendanceLog.STATUS_PRESENT if decision['gym_access'] else AttendanceLog.STATUS_ABSENT,
         )
@@ -474,6 +494,7 @@ def bridge_entry(request):
             source=AttendanceLog.SOURCE_DEVICE,
             verification_mode=AttendanceLog.VERIFICATION_DEVICE,
             device_id=payload.get('device_id', 'bridge'),
+            device_user_id=staff_id,
             remarks='Bridge attendance attempt' if decision['is_staff_active'] else 'Bridge staff access denied by software rules',
             status=AttendanceLog.STATUS_PRESENT if decision['is_staff_active'] else AttendanceLog.STATUS_ABSENT,
         )
