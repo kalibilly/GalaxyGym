@@ -4,6 +4,9 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import AttendanceLog
+import logging
+
+logger = logging.getLogger('biometric')
 
 
 class AccessDecisionError(Exception):
@@ -117,20 +120,34 @@ def has_daily_attendance_for_user(user_type, user, for_date=None):
     return AttendanceLog.objects.filter(staff=user).filter(lookup).exists()
 
 
-def create_attendance_attempt(user_type, user, *, source, verification_mode, device_id, remarks, status='present', check_in_time=None):
+def create_attendance_attempt(user_type, user, *, source, verification_mode, device_id, remarks, status='present', check_in_time=None, device_user_id=None):
+    # Defensive: ensure we have a mapped user and a device_user_id where possible
+    if not user:
+        logger.warning('create_attendance_attempt called without user (device_user_id=%s)', device_user_id)
+        return None, False
+
     attendance_date = check_in_time.date() if check_in_time else date.today()
     if has_daily_attendance_for_user(user_type, user, for_date=attendance_date):
+        logger.debug('Daily attendance already exists for %s %s on %s', user_type, getattr(user, 'id', None), attendance_date)
         return None, True
 
-    attendance = AttendanceLog.objects.create(
-        member=user if user_type == 'member' else None,
-        staff=user if user_type == 'staff' else None,
-        source=source,
-        verification_mode=verification_mode,
-        device_id=device_id,
-        status=status,
-        remarks=remarks,
-        check_in_time=check_in_time if check_in_time else timezone.localtime(),
-        date=attendance_date,
-    )
-    return attendance, False
+    attrs = {
+        'member': user if user_type == 'member' else None,
+        'staff': user if user_type == 'staff' else None,
+        'source': source,
+        'verification_mode': verification_mode,
+        'device_id': device_id,
+        'device_user_id': device_user_id,
+        'status': status,
+        'remarks': remarks,
+        'check_in_time': check_in_time if check_in_time else timezone.localtime(),
+        'date': attendance_date,
+    }
+
+    try:
+        attendance = AttendanceLog.objects.create(**attrs)
+        logger.info('Attendance created for %s: id=%s device_user_id=%s', user_type, attendance.pk, device_user_id)
+        return attendance, False
+    except Exception:
+        logger.exception('Failed to create AttendanceLog for %s device_user_id=%s', user_type, device_user_id)
+        return None, False
