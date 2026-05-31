@@ -8,7 +8,12 @@ from core.views import HomeView
 urlpatterns = [
     path('admin/', admin.site.urls),
 
+    # Existing attendance API
     path('api/attendance/', include('attendance.api_urls', namespace='attendance_api')),
+
+    # Additional routes for eSSL/ZKTeco ADMS compatibility
+    path('iclock/', include('attendance.api_urls')),
+
     path('accounts/', include('accounts.urls')),
     path('dashboard/', include('core.urls')),
     path('departments/', include('departments.urls')),
