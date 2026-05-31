@@ -313,6 +313,7 @@ def get_primary_payload(post_data, xml_fields, plain_text_rows, json_payload):
 
 
 def dispatch_biometric_request(request, payload, device_user_id, device_serial, device_timestamp):
+    logger.debug('Dispatch biometric request: device_user_id=%s device_serial=%s device_timestamp=%s', device_user_id, device_serial, device_timestamp)
     target = get_device_target(device_user_id)
     if not target:
         logger.warning('Biometric request could not match any Member or Staff for device_user_id=%s', device_user_id)
@@ -574,6 +575,28 @@ class BiometricEndpointView(View):
         }
         log_biometric_request(request, payload)
 
+        # If the device sent multiple USER lines (common with ADMS/ZKTeco),
+        # parse_plain_text_rows returns multiple dicts. Process each row
+        # individually so every PIN entry is evaluated and recorded.
+        if plain_text_rows:
+            results = []
+            for idx, row in enumerate(plain_text_rows):
+                row_device_user_id = extract_device_user_id(row, query_data)
+                row_device_serial = extract_device_serial(query_data, post_data, xml_fields, row, json_payload or {})
+                row_ts = parse_device_timestamp(
+                    row.get('datetime') or row.get('stamp') or row.get('time') or row.get('date')
+                )
+                logger.debug('Processing biometric row %d: user=%s serial=%s ts=%s', idx, row_device_user_id, row_device_serial, row_ts)
+                # update device record once (keep last payload/time)
+                update_device_record(row_device_serial, raw_body)
+                resp = dispatch_biometric_request(request, payload, row_device_user_id, row_device_serial, row_ts)
+                results.append({'row': idx, 'user': row_device_user_id, 'status': getattr(resp, 'status_code', 'OK')})
+
+            logger.info('Processed %d biometric rows, users=%s', len(plain_text_rows), [r['user'] for r in results])
+            # Devices expect a single short response; return OK to acknowledge receipt
+            return HttpResponse('OK', content_type='text/plain')
+
+        # fallback for non-plain payloads (JSON, XML, POST fields)
         primary_payload = get_primary_payload(post_data, xml_fields, plain_text_rows, json_payload)
         device_user_id = extract_device_user_id(primary_payload, query_data)
         device_serial = extract_device_serial(query_data, post_data, xml_fields, primary_payload, json_payload or {})
