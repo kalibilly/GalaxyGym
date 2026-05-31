@@ -63,6 +63,9 @@ class AttendanceLog(TimeStampedModel):
     source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default=SOURCE_MANUAL)
     verification_mode = models.CharField(max_length=16, choices=VERIFICATION_CHOICES, default=VERIFICATION_MANUAL)
     device_id = models.CharField(max_length=64, blank=True)
+    # device_user_id stores the PIN/UID reported by the biometric device
+    # persisted here to aid debugging and mapping back to devices/users
+    device_user_id = models.CharField(max_length=64, blank=True, null=True)
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PRESENT)
     remarks = models.TextField(blank=True)
 
