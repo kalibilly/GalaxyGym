@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
@@ -172,29 +173,38 @@ def parse_plain_text_rows(raw_body):
         return rows
     for line in raw_body.splitlines():
         stripped_line = line.strip()
-        if not stripped_line or '=' not in stripped_line:
+        if not stripped_line:
             continue
+
         parsed_line = {}
         tokens = stripped_line.replace('\t', ' ').split()
-        index = 0
-        while index < len(tokens):
-            token = tokens[index]
-            if '=' not in token:
-                index += 1
-                continue
-            key, value = token.split('=', 1)
-            key = key.lower()
-            if key in {'datetime', 'date', 'time', 'stamp'} and index + 1 < len(tokens):
-                next_token = tokens[index + 1]
-                if ':' in next_token and not '=' in next_token:
-                    value = f'{value} {next_token}'
+        if '=' in stripped_line:
+            index = 0
+            while index < len(tokens):
+                token = tokens[index]
+                if '=' not in token:
                     index += 1
-            parsed_line[key] = value.strip()
-            index += 1
+                    continue
+                key, value = token.split('=', 1)
+                key = key.lower()
+                if key in {'datetime', 'date', 'time', 'stamp'} and index + 1 < len(tokens):
+                    next_token = tokens[index + 1]
+                    if ':' in next_token and '=' not in next_token:
+                        value = f'{value} {next_token}'
+                        index += 1
+                parsed_line[key] = value.strip()
+                index += 1
+        else:
+            # ATTLOG format: first column is the device user ID; preserve raw data for debugging
+            parsed_line['id'] = tokens[0] if tokens else None
+            parsed_line['_split_cols'] = tokens
+            parsed_line['_raw'] = stripped_line
+            logger.debug('parse_plain_text_rows ATTLOG row=%s split=%s parsed=%s', stripped_line, tokens, parsed_line)
+
         if parsed_line:
             rows.append(parsed_line)
-        logger.debug('parse_plain_text_rows parsed %d rows: %s', len(rows), rows)
-        return rows
+    logger.debug('parse_plain_text_rows parsed %d rows: %s', len(rows), rows)
+    return rows
     
 
 
@@ -607,7 +617,13 @@ class BiometricEndpointView(View):
                 row_ts = parse_device_timestamp(
                     row.get('datetime') or row.get('stamp') or row.get('time') or row.get('date')
                 )
-                logger.debug('Processing biometric row %d: user=%s serial=%s ts=%s', idx, row_device_user_id, row_device_serial, row_ts)
+                logger.debug(
+                    'Processing biometric row %d raw=%s split=%s parsed_user=%s',
+                    idx,
+                    row.get('_raw') or row,
+                    row.get('_split_cols'),
+                    row_device_user_id,
+                )
                 # update device record once (keep last payload/time)
                 update_device_record(row_device_serial, raw_body)
                 resp = dispatch_biometric_request(request, payload, row_device_user_id, row_device_serial, row_ts)
