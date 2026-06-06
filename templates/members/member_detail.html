@@ -18,24 +18,51 @@
                 <dl class="row mb-0">
                     <dt class="col-sm-4">Phone</dt>
                     <dd class="col-sm-8">{{ member.phone_number }}</dd>
+
                     <dt class="col-sm-4">Email</dt>
-                    <dd class="col-sm-8">{{ member.email|default:'—' }}</dd>
+                    <dd class="col-sm-8">{{ member.email|default:"—" }}</dd>
+
                     <dt class="col-sm-4">Status</dt>
                     <dd class="col-sm-8">{{ member.get_status_display }}</dd>
+
                     <dt class="col-sm-4">Created By</dt>
-                    <dd class="col-sm-8">{{ member.created_by.full_name if member.created_by else 'System' }}</dd>
+                    <dd class="col-sm-8">
+                        {% if member.created_by %}
+                            {{ member.created_by.full_name }}
+                        {% else %}
+                            System
+                        {% endif %}
+                    </dd>
+
                     <dt class="col-sm-4">Updated By</dt>
-                    <dd class="col-sm-8">{{ member.updated_by.full_name if member.updated_by else 'System' }}</dd>
+                    <dd class="col-sm-8">
+                        {% if member.updated_by %}
+                            {{ member.updated_by.full_name }}
+                        {% else %}
+                            System
+                        {% endif %}
+                    </dd>
+
                     <dt class="col-sm-4">Joined</dt>
-                    <dd class="col-sm-8">{{ member.date_of_joining|date:'M d, Y' }}</dd>
+                    <dd class="col-sm-8">{{ member.date_of_joining|date:"M d, Y" }}</dd>
+
                     <dt class="col-sm-4">Assigned Staff</dt>
-                    <dd class="col-sm-8">{{ member.assigned_staff.full_name if member.assigned_staff else '—' }}</dd>
+                    <dd class="col-sm-8">
+                        {% if member.assigned_staff %}
+                            {{ member.assigned_staff.full_name }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </dd>
+
                     <dt class="col-sm-4">Emergency Contact</dt>
-                    <dd class="col-sm-8">{{ member.emergency_contact_name|default:'—' }} — {{ member.emergency_contact_phone|default:'—' }}</dd>
+                    <dd class="col-sm-8">{{ member.emergency_contact_name|default:"—" }} — {{ member.emergency_contact_phone|default:"—" }}</dd>
+
                     <dt class="col-sm-4">Address</dt>
-                    <dd class="col-sm-8">{{ member.address|linebreaksbr|default:'No address provided.' }}</dd>
+                    <dd class="col-sm-8">{{ member.address|linebreaksbr|default:"No address provided." }}</dd>
+
                     <dt class="col-sm-4">Notes</dt>
-                    <dd class="col-sm-8">{{ member.notes|linebreaksbr|default:'No notes available.' }}</dd>
+                    <dd class="col-sm-8">{{ member.notes|linebreaksbr|default:"No notes available." }}</dd>
                 </dl>
             </div>
         </div>
@@ -46,7 +73,7 @@
                 {% if active_membership %}
                     <p class="mb-2">Current plan: <strong>{{ active_membership.plan.name }}</strong></p>
                     <p class="mb-2">Status: <strong>{{ active_membership.get_status_display }}</strong></p>
-                    <p class="mb-2">Valid: {{ active_membership.start_date|date:'M d, Y' }} — {{ active_membership.end_date|date:'M d, Y' }}</p>
+                    <p class="mb-2">Valid: {{ active_membership.start_date|date:"M d, Y" }} — {{ active_membership.end_date|date:"M d, Y" }}</p>
                 {% else %}
                     <p class="text-muted">No active membership found.</p>
                 {% endif %}
@@ -58,9 +85,11 @@
                             <li class="list-group-item d-flex justify-content-between align-items-center p-2">
                                 <div>
                                     <strong>{{ membership.plan.name }}</strong>
-                                    <div class="small text-muted">{{ membership.start_date|date:'M d, Y' }} — {{ membership.end_date|date:'M d, Y' }}</div>
+                                    <div class="small text-muted">{{ membership.start_date|date:"M d, Y" }} — {{ membership.end_date|date:"M d, Y" }}</div>
                                 </div>
-                                <span class="badge bg-{{ 'success' if membership.status == 'active' else 'warning' if membership.status == 'expiring_soon' else 'secondary' }}">{{ membership.get_status_display }}</span>
+                                <span class="badge {% if membership.status == 'active' %}bg-success{% elif membership.status == 'expiring_soon' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                    {{ membership.get_status_display }}
+                                </span>
                             </li>
                         {% endfor %}
                     </ul>
@@ -75,7 +104,10 @@
                         <h6>Open Balance</h6>
                         <p class="display-6 mb-0">{{ outstanding_balance }}</p>
                         {% if latest_invoice %}
-                            <p class="small text-muted mb-0">Latest invoice: <a href="{% url 'payments:invoice_detail' latest_invoice.pk %}">{{ latest_invoice.invoice_no }}</a></p>
+                            <p class="small text-muted mb-0">
+                                Latest invoice:
+                                <a href="{% url 'payments:invoice_detail' latest_invoice.pk %}">{{ latest_invoice.invoice_no }}</a>
+                            </p>
                         {% endif %}
                     </div>
                 </div>
@@ -87,7 +119,7 @@
                         {% if recent_payments %}
                             <ul class="list-unstyled mb-0">
                                 {% for payment in recent_payments %}
-                                    <li>{{ payment.amount_paid }} on {{ payment.payment_date|date:'M d' }}</li>
+                                    <li>{{ payment.amount_paid }} on {{ payment.payment_date|date:"M d" }}</li>
                                 {% endfor %}
                             </ul>
                         {% else %}
@@ -106,10 +138,12 @@
                         {% for attendance in attendance_history %}
                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                 <div>
-                                    {{ attendance.date|date:'M d, Y' }}
-                                    <div class="small text-muted">{{ attendance.check_in_time|date:'H:i' }}</div>
+                                    {{ attendance.date|date:"M d, Y" }}
+                                    <div class="small text-muted">{{ attendance.check_in_time|date:"H:i" }}</div>
                                 </div>
-                                <span class="badge bg-{{ 'success' if attendance.status == 'present' else 'warning' if attendance.status == 'late' else 'secondary' }}">{{ attendance.get_status_display }}</span>
+                                <span class="badge {% if attendance.status == 'present' %}bg-success{% elif attendance.status == 'late' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                    {{ attendance.get_status_display }}
+                                </span>
                             </li>
                         {% endfor %}
                     </ul>
