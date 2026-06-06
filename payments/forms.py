@@ -13,7 +13,9 @@ class InvoiceForm(forms.ModelForm):
         fields = [
             'invoice_no',
             'member',
-            'membership',
+            'membership_plan',
+            'membership_end_date',
+            'discount_amount',
             'invoice_date',
             'due_date',
             'balance_amount',
@@ -23,10 +25,14 @@ class InvoiceForm(forms.ModelForm):
         widgets = {
             'invoice_date': forms.DateInput(attrs={'type': 'date'}),
             'due_date': forms.DateInput(attrs={'type': 'date', 'readonly': 'readonly'}),
+            'membership_end_date': forms.DateInput(attrs={'type': 'date'}),
             'remarks': forms.Textarea(attrs={'rows': 3}),
         }
         labels = {
             'invoice_date': 'Membership Start Date',
+            'membership_plan': 'Membership Plan',
+            'membership_end_date': 'Membership End Date',
+            'discount_amount': 'Discount',
             'balance_amount': 'Pending Amount',
             'pending_payment_status': 'Pending Payment Status',
         }
