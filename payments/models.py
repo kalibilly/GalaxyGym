@@ -45,6 +45,14 @@ class Invoice(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name='invoices',
     )
+    membership_plan = models.ForeignKey(
+        'memberships.MembershipPlan',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='invoices_by_plan',
+    )
+    membership_end_date = models.DateField(null=True, blank=True)
     invoice_date = models.DateField(default=timezone.localdate)
     due_date = models.DateField(default=timezone.localdate)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -77,9 +85,8 @@ class Invoice(TimeStampedModel):
             self.STATUS_OVERDUE: 'danger',
         }.get(self.status, 'secondary')
 
-    @property
-    def membership_end_date(self):
-        return self.membership.end_date if self.membership else None
+    # `membership_end_date` is now a stored DateField so invoice records can
+    # explicitly keep the end date even when a Membership object is not linked.
 
     @classmethod
     def get_next_invoice_no(cls):
