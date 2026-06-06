@@ -7,6 +7,7 @@ class MemberForm(forms.ModelForm):
     class Meta:
         model = Member
         fields = [
+            'device_user_id',
             'member_id',
             'full_name',
             'phone_number',
