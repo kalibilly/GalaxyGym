@@ -49,6 +49,11 @@ body {
     border-color: rgba(255,255,255,0.12);
 }
 
+/* Improve contrast for form labels in dark theme: make labels white */
+form label, .form-label {
+    color: #ffffff !important;
+}
+
 .form-control:focus, .form-select:focus {
     background-color: #0d1323;
     color: #f8f9fa;
