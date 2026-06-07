@@ -14,18 +14,20 @@ class InvoiceForm(forms.ModelForm):
             'invoice_no',
             'member',
             'membership_plan',
-            'membership_end_date',
-            'discount_amount',
             'invoice_date',
-            'due_date',
+            'membership_end_date',
+            'subtotal',
+            'discount_amount',
+            'total_amount',
             'balance_amount',
+            'due_date',
             'pending_payment_status',
             'remarks',
         ]
         widgets = {
             'invoice_date': forms.DateInput(attrs={'type': 'date'}),
-            'due_date': forms.DateInput(attrs={'type': 'date', 'readonly': 'readonly'}),
             'membership_end_date': forms.DateInput(attrs={'type': 'date'}),
+            'due_date': forms.DateInput(attrs={'type': 'date'}),
             'remarks': forms.Textarea(attrs={'rows': 3}),
         }
         labels = {
@@ -41,8 +43,6 @@ class InvoiceForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if 'invoice_no' in self.fields:
             self.fields['invoice_no'].widget.attrs.update({'readonly': 'readonly'})
-        if 'due_date' in self.fields:
-            self.fields['due_date'].widget.attrs.update({'readonly': 'readonly'})
 
     def clean(self):
         cleaned_data = super().clean()
@@ -87,7 +87,7 @@ class PaymentForm(forms.ModelForm):
         if invoice and member and member != invoice.member:
             raise ValidationError('Selected member must match the invoice member.')
         if invoice and amount_paid is not None:
-            outstanding = invoice.get_balance_amount()
+            outstanding = invoice.balance_amount
             if self.instance.pk:
                 original_amount = self.instance.amount_paid
                 outstanding += original_amount
