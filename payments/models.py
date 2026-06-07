@@ -85,9 +85,6 @@ class Invoice(TimeStampedModel):
             self.STATUS_OVERDUE: 'danger',
         }.get(self.status, 'secondary')
 
-    # `membership_end_date` is now a stored DateField so invoice records can
-    # explicitly keep the end date even when a Membership object is not linked.
-
     @classmethod
     def get_next_invoice_no(cls):
         prefix = 'INV-'
@@ -103,14 +100,34 @@ class Invoice(TimeStampedModel):
         return f'{prefix}{next_number:04d}'
 
     def clean(self):
-        if self.due_date < self.invoice_date:
+        subtotal = self.subtotal or Decimal('0.00')
+        discount_amount = self.discount_amount or Decimal('0.00')
+        total_amount = self.total_amount or Decimal('0.00')
+        paid_amount = self.paid_amount or Decimal('0.00')
+        balance_amount = self.balance_amount or Decimal('0.00')
+
+        if self.invoice_date and self.membership_end_date and self.membership_end_date < self.invoice_date:
+            raise ValidationError('Membership end date cannot be earlier than membership start date.')
+
+        if self.due_date and self.invoice_date and self.due_date < self.invoice_date:
             raise ValidationError('Invoice due date cannot be earlier than the invoice date.')
-        if self.balance_amount < 0 or self.paid_amount < 0 or self.total_amount < 0:
+
+        if subtotal < 0 or discount_amount < 0 or total_amount < 0 or paid_amount < 0 or balance_amount < 0:
             raise ValidationError('Invoice amounts cannot be negative.')
+
+        if discount_amount > subtotal:
+            raise ValidationError('Discount cannot be greater than subtotal.')
+
+        expected_total = subtotal + (self.tax_amount or Decimal('0.00')) - discount_amount
+        if total_amount != expected_total:
+            raise ValidationError(f'Total amount must be equal to subtotal + tax - discount ({expected_total}).')
+
+        if balance_amount != (total_amount - paid_amount):
+            raise ValidationError('Pending amount must be equal to total amount minus paid amount.')
 
     def get_paid_amount(self):
         if not self.pk:
-            return self.paid_amount
+            return self.paid_amount or Decimal('0.00')
         total = self.payments.aggregate(total=models.Sum('amount_paid'))['total']
         return total or Decimal('0.00')
 
@@ -137,28 +154,29 @@ class Invoice(TimeStampedModel):
         self.paid_amount = self.get_paid_amount()
         self.balance_amount = self.total_amount - self.paid_amount
         self.status = self.derive_status()
-        self.save(update_fields=['paid_amount', 'balance_amount', 'status'])
+        super().save(update_fields=['paid_amount', 'balance_amount', 'status'])
 
     def save(self, *args, **kwargs):
         if not self.invoice_no:
             self.invoice_no = self.get_next_invoice_no()
-        if self.invoice_date:
-            self.due_date = self.invoice_date + timedelta(days=7)
 
-        self.subtotal = self.balance_amount or Decimal('0.00')
-        self.discount_amount = Decimal('0.00')
-        self.tax_amount = Decimal('0.00')
+        self.subtotal = self.subtotal or Decimal('0.00')
+        self.discount_amount = self.discount_amount or Decimal('0.00')
+        self.tax_amount = self.tax_amount or Decimal('0.00')
 
-        if self.pk and self.payments.exists():
+        if self.pk:
             self.paid_amount = self.get_paid_amount()
-            self.total_amount = self.paid_amount + self.balance_amount
-            self.subtotal = self.total_amount
         else:
-            self.total_amount = max(self.subtotal + self.tax_amount - self.discount_amount, Decimal('0.00'))
-            self.paid_amount = self.get_paid_amount()
+            self.paid_amount = self.paid_amount or Decimal('0.00')
 
-        self.balance_amount = self.total_amount - self.paid_amount
+        self.total_amount = max(
+            self.subtotal + self.tax_amount - self.discount_amount,
+            Decimal('0.00')
+        )
+        self.balance_amount = max(self.total_amount - self.paid_amount, Decimal('0.00'))
         self.status = self.derive_status()
+
+        self.full_clean()
         super().save(*args, **kwargs)
 
 
@@ -207,9 +225,9 @@ class Payment(TimeStampedModel):
             raise ValidationError('Payment member must match the invoice member.')
 
         if self.invoice and self.invoice.pk:
-            outstanding = self.invoice.get_balance_amount()
+            outstanding = self.invoice.balance_amount or Decimal('0.00')
             if self.pk:
-                original_amount = Payment.objects.filter(pk=self.pk).values_list('amount_paid', flat=True).first() or 0
+                original_amount = Payment.objects.filter(pk=self.pk).values_list('amount_paid', flat=True).first() or Decimal('0.00')
                 outstanding += original_amount
             if self.amount_paid > outstanding:
                 raise ValidationError('Payment amount cannot exceed the invoice balance.')
