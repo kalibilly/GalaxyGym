@@ -8,7 +8,7 @@
         <div class="card mb-3">
             <div class="card-body">
                 <h1 class="h4">Invoice {{ invoice.invoice_no }}</h1>
-                <p class="text-muted mb-2">{{ invoice.member.full_name }}</p>
+                <p class="text-white-50 mb-2">{{ invoice.member.full_name }}</p>
                 <p class="mb-0">{{ invoice.remarks|linebreaksbr|default:'No remarks provided.' }}</p>
             </div>
         </div>
@@ -44,7 +44,7 @@
                                 <div class="d-flex justify-content-between">
                                     <div>
                                         <strong>{{ payment.amount_paid }}</strong>
-                                        <div class="small text-muted">{{ payment.payment_date|date:'M d, Y' }} via {{ payment.get_payment_mode_display }}</div>
+                                        <div class="small text-white-50">{{ payment.payment_date|date:'M d, Y' }} via {{ payment.get_payment_mode_display }}</div>
                                     </div>
                                     <div class="text-end">
                                         <a href="{% url 'payments:payment_detail' payment.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
@@ -54,7 +54,7 @@
                         {% endfor %}
                     </ul>
                 {% else %}
-                    <p class="text-muted">No payments recorded for this invoice.</p>
+                    <p class="text-white-50">No payments recorded for this invoice.</p>
                 {% endif %}
             </div>
         </div>
