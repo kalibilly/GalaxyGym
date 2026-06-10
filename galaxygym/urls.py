@@ -9,7 +9,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     # Existing attendance API
-    path('api/attendance/', include('attendance.api_urls', namespace='attendance_api')),
+    path('api/attendance/', include(('attendance.api_urls', 'attendance_api'), namespace='attendance_api')),
 
     # Additional routes for eSSL/ZKTeco ADMS compatibility
     path('iclock/', include('attendance.api_urls')),
