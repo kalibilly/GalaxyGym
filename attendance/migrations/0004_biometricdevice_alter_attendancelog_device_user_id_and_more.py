@@ -7,33 +7,36 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('attendance', '0002_attendancelog_device_user_id'),
+        ('attendance', '0003_attendancelog_device_user_id'),
+        ('attendance', '0002_biometricdevice'),
         ('members', '0003_alter_member_device_user_id'),
         ('staffs', '0003_alter_staff_device_user_id'),
     ]
 
     operations = [
-        migrations.CreateModel(
-            name='BiometricDevice',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('serial_number', models.CharField(max_length=64, unique=True)),
-                ('device_name', models.CharField(blank=True, max_length=128)),
-                ('device_type', models.CharField(choices=[('unknown', 'Unknown'), ('mb20', 'MB20'), ('aiface', 'AiFace')], default='unknown', max_length=32)),
-                ('firmware_version', models.CharField(blank=True, max_length=64)),
-                ('is_active', models.BooleanField(default=True)),
-                ('last_seen_at', models.DateTimeField(blank=True, null=True)),
-                ('last_sync_at', models.DateTimeField(blank=True, null=True)),
-                ('last_known_ip', models.CharField(blank=True, max_length=45)),
-                ('last_payload', models.TextField(blank=True)),
-                ('notes', models.TextField(blank=True)),
-            ],
-            options={
-                'verbose_name': 'Biometric Device',
-                'verbose_name_plural': 'Biometric Devices',
-            },
+        migrations.AddField(
+            model_name='biometricdevice',
+            name='device_type',
+            field=models.CharField(
+                choices=[('unknown', 'Unknown'), ('mb20', 'MB20'), ('aiface', 'AiFace')],
+                default='unknown',
+                max_length=32,
+            ),
+        ),
+        migrations.AddField(
+            model_name='biometricdevice',
+            name='firmware_version',
+            field=models.CharField(blank=True, max_length=64),
+        ),
+        migrations.AddField(
+            model_name='biometricdevice',
+            name='last_known_ip',
+            field=models.CharField(blank=True, max_length=45),
+        ),
+        migrations.AddField(
+            model_name='biometricdevice',
+            name='last_sync_at',
+            field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AlterField(
             model_name='attendancelog',
