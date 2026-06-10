@@ -21,6 +21,7 @@ from members.models import Member
 from staffs.models import Staff
 from .forms import AttendanceLogForm
 from .models import AttendanceLog, BiometricDevice
+from .biometric import BiometricSyncService
 from .services import AccessDecisionError, create_attendance_attempt, evaluate_member_access, evaluate_staff_access
 
 logger = logging.getLogger('biometric')
@@ -304,18 +305,105 @@ def deny_expired_member(target):
             target.user.save(update_fields=['is_active'])
 
 
-def update_device_record(device_serial, raw_body):
+def update_device_record(device_serial, raw_body, request=None):
     if not device_serial:
-        return
+        return None
     device, created = BiometricDevice.objects.get_or_create(
         serial_number=device_serial,
         defaults={'device_name': device_serial},
     )
-    device.last_seen_at = timezone.localtime()
-    device.last_payload = raw_body[:5000]
-    if not device.device_name:
-        device.device_name = device_serial
-    device.save(update_fields=['last_seen_at', 'last_payload', 'device_name'])
+    remote_ip = None
+    if request is not None:
+        remote_ip = request.META.get('REMOTE_ADDR')
+    device.touch_heartbeat(raw_body, remote_ip=remote_ip)
+    return device
+
+
+@require_http_methods(['GET', 'POST'])
+@csrf_exempt
+@require_http_methods(['GET', 'POST'])
+def device_sync_status(request):
+    query = request.GET.dict() if request.method == 'GET' else request.POST.dict()
+    serial_number = query.get('device_serial') or query.get('sn') or query.get('serial')
+    if not serial_number:
+        return JsonResponse({'ok': False, 'error': 'device_serial query parameter is required.'}, status=400)
+
+    device = BiometricDevice.objects.filter(serial_number=serial_number).first()
+    if not device:
+        return JsonResponse({'ok': False, 'error': 'Unknown device serial.'}, status=404)
+
+    adapter = BiometricSyncService(device)
+    status = adapter.probe()
+    return JsonResponse({
+        'ok': True,
+        'device': {
+            'serial_number': device.serial_number,
+            'device_name': device.device_name,
+            'device_type': device.device_type,
+            'firmware_version': device.firmware_version,
+            'is_active': device.is_active,
+            'last_seen_at': device.last_seen_at.isoformat() if device.last_seen_at else None,
+            'last_sync_at': device.last_sync_at.isoformat() if device.last_sync_at else None,
+            'last_known_ip': device.last_known_ip,
+        },
+        'sync_status': status,
+    })
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def device_enrollment(request):
+    try:
+        payload = json.loads(request.body or '{}') if request.content_type and 'json' in request.content_type else request.POST.dict()
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON payload.'}, status=400)
+
+    serial_number = payload.get('device_serial') or payload.get('serial') or payload.get('sn')
+    device_user_id = (
+        payload.get('device_user_id')
+        or payload.get('pin')
+        or payload.get('uid')
+        or payload.get('user_id')
+        or payload.get('userid')
+    )
+    member_id = payload.get('member_id')
+    staff_id = payload.get('staff_id')
+
+    if not serial_number or not device_user_id or not (member_id or staff_id):
+        return JsonResponse(
+            {
+                'ok': False,
+                'error': 'device_serial, device_user_id, and member_id or staff_id are required.',
+            },
+            status=400,
+        )
+
+    device, created = BiometricDevice.objects.get_or_create(
+        serial_number=serial_number,
+        defaults={'device_name': serial_number},
+    )
+    device.touch_heartbeat(json.dumps(payload, default=str), remote_ip=request.META.get('REMOTE_ADDR'))
+
+    target = None
+    if member_id:
+        target = Member.objects.filter(member_id=member_id).select_related('user').first()
+        if not target:
+            return JsonResponse({'ok': False, 'error': 'Unknown member_id.'}, status=404)
+    elif staff_id:
+        target = Staff.objects.filter(staff_id=staff_id).select_related('user').first()
+        if not target:
+            return JsonResponse({'ok': False, 'error': 'Unknown staff_id.'}, status=404)
+
+    sync_service = BiometricSyncService(device)
+    sync_result = sync_service.push_enrollment(target, device_user_id)
+    return JsonResponse({
+        'ok': sync_result.get('ok', False),
+        'result': sync_result,
+        'device_serial': device.serial_number,
+        'device_user_id': device_user_id,
+        'member_id': getattr(target, 'member_id', None),
+        'staff_id': getattr(target, 'staff_id', None),
+    }, status=200 if sync_result.get('ok', False) else 409)
 
 
 def log_biometric_request(request, payload):
@@ -447,7 +535,7 @@ def biometric_get_request(request):
     log_biometric_request(request, payload)
 
     device_serial = extract_device_serial(query_data, post_data, xml_fields, plain_text_rows[0] if plain_text_rows else {}, json_payload or {})
-    update_device_record(device_serial, raw_body)
+    update_device_record(device_serial, raw_body, request=request)
     return HttpResponse('OK', content_type='text/plain')
 
 
@@ -562,14 +650,6 @@ def access_sync(request):
         })
 
     return JsonResponse({'ok': False, 'error': 'Provide member_id or staff_id.'}, status=400)
-
-def log_biometric_request(request, payload):
-    logger.info(
-        'Biometric request received: %s',
-        json.dumps(payload, default=str),
-    )
-
-
 @method_decorator(csrf_exempt, name='dispatch')
 @method_decorator(require_http_methods(['GET', 'POST']), name='dispatch')
 class BiometricEndpointView(View):
@@ -625,7 +705,7 @@ class BiometricEndpointView(View):
                     row_device_user_id,
                 )
                 # update device record once (keep last payload/time)
-                update_device_record(row_device_serial, raw_body)
+                update_device_record(row_device_serial, raw_body, request=request)
                 resp = dispatch_biometric_request(request, payload, row_device_user_id, row_device_serial, row_ts)
                 results.append({'row': idx, 'user': row_device_user_id, 'status': getattr(resp, 'status_code', 'OK')})
 
@@ -643,7 +723,7 @@ class BiometricEndpointView(View):
             or primary_payload.get('time')
             or primary_payload.get('date')
         )
-        update_device_record(device_serial, raw_body)
+        update_device_record(device_serial, raw_body, request=request)
 
         return dispatch_biometric_request(request, payload, device_user_id, device_serial, device_timestamp)
 
