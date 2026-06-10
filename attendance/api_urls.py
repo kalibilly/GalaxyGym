@@ -5,9 +5,9 @@ from .views import (
     biometric_endpoint,
     biometric_get_request,
     bridge_entry,
+    device_enrollment,
+    device_sync_status,
 )
-
-app_name = 'attendance_api'
 
 urlpatterns = [
     # Root endpoint
@@ -56,4 +56,6 @@ urlpatterns = [
     # Internal bridge endpoints
     path('bridge/', bridge_entry, name='bridge_entry'),
     path('access-sync/', access_sync, name='access_sync'),
+    path('device-sync/status/', device_sync_status, name='device_sync_status'),
+    path('device-sync/enroll/', device_enrollment, name='device_enrollment'),
 ]
