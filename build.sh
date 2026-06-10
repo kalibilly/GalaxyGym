@@ -6,6 +6,7 @@ python manage.py collectstatic --noinput
 
 # python manage.py makemigrations --noinput
 
+python manage.py migrate attendance 0003_attendancelog_device_user_id --fake --noinput
 python manage.py migrate --noinput
 
 if [ "$DJANGO_SUPERUSER_PASSWORD" ] && [ "$DJANGO_SUPERUSER_LOGIN_ID" ] && [ "$DJANGO_SUPERUSER_EMAIL" ] && [ "$DJANGO_SUPERUSER_PHONE_NUMBER" ]; then
