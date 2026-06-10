@@ -7,10 +7,10 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('attendance', '0003_attendancelog_device_user_id'),
         ('attendance', '0002_biometricdevice'),
-        ('members', '0003_alter_member_device_user_id'),
-        ('staffs', '0003_alter_staff_device_user_id'),
+        ('attendance', '0003_attendancelog_device_user_id'),
+        ('members', '0003_member_device_user_id_member_wallet_balance'),
+        ('staffs', '0002_staff_device_user_id'),
     ]
 
     operations = [
@@ -50,15 +50,42 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('person_type', models.CharField(blank=True, choices=[('member', 'Member'), ('staff', 'Staff')], max_length=12)),
-                ('action', models.CharField(choices=[('device_heartbeat', 'Device Heartbeat'), ('access_attempt', 'Access Attempt'), ('enrollment', 'Enrollment'), ('device_sync', 'Device Sync'), ('conflict', 'Conflict')], max_length=32)),
+                ('action', models.CharField(
+                    choices=[
+                        ('device_heartbeat', 'Device Heartbeat'),
+                        ('access_attempt', 'Access Attempt'),
+                        ('enrollment', 'Enrollment'),
+                        ('device_sync', 'Device Sync'),
+                        ('conflict', 'Conflict'),
+                    ],
+                    max_length=32,
+                )),
                 ('device_user_id', models.CharField(blank=True, max_length=64)),
                 ('success', models.BooleanField(default=True)),
                 ('payload', models.TextField(blank=True)),
                 ('response', models.TextField(blank=True)),
                 ('notes', models.TextField(blank=True)),
-                ('device', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='sync_logs', to='attendance.biometricdevice')),
-                ('member', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='biometric_sync_logs', to='members.member')),
-                ('staff', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='biometric_sync_logs', to='staffs.staff')),
+                ('device', models.ForeignKey(
+                    blank=True,
+                    null=True,
+                    on_delete=django.db.models.deletion.SET_NULL,
+                    related_name='sync_logs',
+                    to='attendance.biometricdevice',
+                )),
+                ('member', models.ForeignKey(
+                    blank=True,
+                    null=True,
+                    on_delete=django.db.models.deletion.SET_NULL,
+                    related_name='biometric_sync_logs',
+                    to='members.member',
+                )),
+                ('staff', models.ForeignKey(
+                    blank=True,
+                    null=True,
+                    on_delete=django.db.models.deletion.SET_NULL,
+                    related_name='biometric_sync_logs',
+                    to='staffs.staff',
+                )),
             ],
             options={
                 'verbose_name': 'Biometric Sync Log',
