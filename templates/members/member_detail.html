@@ -6,9 +6,39 @@
 <div class="row">
     <div class="col-lg-8">
         <div class="card mb-3">
-            <div class="card-body">
-                <h1 class="h4">{{ member.full_name }}</h1>
-                <p class="text-white-50 mb-0">{{ member.member_id }}</p>
+            <div class="card-body d-flex flex-wrap justify-content-between align-items-start gap-3">
+                <div>
+                    <h1 class="h4 mb-1">{{ member.full_name }}</h1>
+                    <p class="text-white-50 mb-1">{{ member.member_id }}</p>
+                    <p class="text-white-50 mb-0">
+                        Device User ID:
+                        <span class="fw-semibold text-white">{{ member.device_user_id|default:"Not assigned" }}</span>
+                    </p>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{% url 'members:update' member.pk %}" class="btn btn-primary">Edit Member</a>
+
+                    {% if front_device %}
+                        <form method="post" action="{% url 'members:send_to_device' member.pk front_device.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-success">Send to Front Device</button>
+                        </form>
+                    {% endif %}
+
+                    {% if back_device %}
+                        <form method="post" action="{% url 'members:send_to_device' member.pk back_device.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-warning">Send to Back Device</button>
+                        </form>
+                    {% endif %}
+
+                    {% if front_device or back_device %}
+                        <form method="post" action="{% url 'members:send_to_both_devices' member.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-dark">Send to Both Devices</button>
+                        </form>
+                    {% endif %}
+                </div>
             </div>
         </div>
 
@@ -64,6 +94,133 @@
                     <dt class="col-sm-4">Notes</dt>
                     <dd class="col-sm-8">{{ member.notes|linebreaksbr|default:"No notes available." }}</dd>
                 </dl>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">Biometric Device Status</div>
+            <div class="card-body">
+                {% if biometric_devices %}
+                    <div class="row g-3">
+                        {% for device in biometric_devices %}
+                            {% with status=device_status_map|get_item:device.id %}
+                                <div class="col-md-6">
+                                    <div class="card h-100 border-0 bg-dark-subtle">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+                                                <div>
+                                                    <h6 class="mb-1">{{ device.device_name|default:device.serial_number }}</h6>
+                                                    <div class="small text-white-50">
+                                                        {{ device.get_device_type_display }}{% if device.last_known_ip %} • {{ device.last_known_ip }}{% endif %}
+                                                    </div>
+                                                </div>
+
+                                                {% if status %}
+                                                    {% if status.sync_status == 'success' %}
+                                                        <span class="badge bg-success">Synced</span>
+                                                    {% elif status.sync_status == 'sent' %}
+                                                        <span class="badge bg-info text-dark">Sent</span>
+                                                    {% elif status.sync_status == 'failed' %}
+                                                        <span class="badge bg-danger">Failed</span>
+                                                    {% else %}
+                                                        <span class="badge bg-secondary">Pending</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Not synced</span>
+                                                {% endif %}
+                                            </div>
+
+                                            <dl class="row small mb-3">
+                                                <dt class="col-5">Device User ID</dt>
+                                                <dd class="col-7">{{ status.device_user_id|default:member.device_user_id|default:"—" }}</dd>
+
+                                                <dt class="col-5">Enabled</dt>
+                                                <dd class="col-7">
+                                                    {% if status and status.is_enabled_on_device %}
+                                                        <span class="text-success">Yes</span>
+                                                    {% else %}
+                                                        <span class="text-white-50">No</span>
+                                                    {% endif %}
+                                                </dd>
+
+                                                <dt class="col-5">Face</dt>
+                                                <dd class="col-7">
+                                                    {% if status and status.face_added %}
+                                                        <span class="text-success">Added</span>
+                                                    {% else %}
+                                                        <span class="text-white-50">Not added</span>
+                                                    {% endif %}
+                                                </dd>
+
+                                                <dt class="col-5">Fingerprint</dt>
+                                                <dd class="col-7">
+                                                    {% if status and status.fingerprint_added %}
+                                                        <span class="text-success">Added</span>
+                                                    {% else %}
+                                                        <span class="text-white-50">Not added</span>
+                                                    {% endif %}
+                                                </dd>
+
+                                                <dt class="col-5">Password</dt>
+                                                <dd class="col-7">
+                                                    {% if status and status.password_added %}
+                                                        <span class="text-success">Added</span>
+                                                    {% else %}
+                                                        <span class="text-white-50">Not added</span>
+                                                    {% endif %}
+                                                </dd>
+
+                                                <dt class="col-5">Last Synced</dt>
+                                                <dd class="col-7">
+                                                    {% if status and status.last_synced_at %}
+                                                        {{ status.last_synced_at|date:"M d, Y H:i" }}
+                                                    {% else %}
+                                                        —
+                                                    {% endif %}
+                                                </dd>
+
+                                                <dt class="col-5">Last Checked</dt>
+                                                <dd class="col-7">
+                                                    {% if status and status.last_status_checked_at %}
+                                                        {{ status.last_status_checked_at|date:"M d, Y H:i" }}
+                                                    {% else %}
+                                                        —
+                                                    {% endif %}
+                                                </dd>
+                                            </dl>
+
+                                            {% if status and status.last_error %}
+                                                <div class="alert alert-danger py-2 px-3 small mb-3">
+                                                    {{ status.last_error }}
+                                                </div>
+                                            {% endif %}
+
+                                            {% if status and status.notes %}
+                                                <div class="alert alert-secondary py-2 px-3 small mb-3">
+                                                    {{ status.notes }}
+                                                </div>
+                                            {% endif %}
+
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <form method="post" action="{% url 'members:send_to_device' member.pk device.pk %}">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="btn btn-sm btn-outline-success">Send to Device</button>
+                                                </form>
+
+                                                <form method="post" action="{% url 'members:check_device_status' member.pk device.pk %}">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="btn btn-sm btn-outline-info">Check Status</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endwith %}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-white-50 mb-0">No biometric devices are configured yet.</p>
+                {% endif %}
             </div>
         </div>
 
