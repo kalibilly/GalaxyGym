@@ -13,7 +13,13 @@
 
 <form method="get" class="row gx-2 gy-3 mb-4">
     <div class="col-sm-4">
-        <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Search member ID, device ID, name, phone, email...">
+        <input
+            type="search"
+            name="q"
+            value="{{ q }}"
+            class="form-control"
+            placeholder="Search member ID, device ID, name, phone, email..."
+        >
     </div>
     <div class="col-sm-3">
         <select name="status" class="form-select">
@@ -27,7 +33,9 @@
         <select name="staff" class="form-select">
             <option value="">Assigned Staff</option>
             {% for staff in staff_members %}
-                <option value="{{ staff.id }}" {% if staff.id|stringformat:'s' == staff_id %}selected{% endif %}>{{ staff.full_name }}</option>
+                <option value="{{ staff.id }}" {% if staff.id|stringformat:'s' == staff_id %}selected{% endif %}>
+                    {{ staff.full_name }}
+                </option>
             {% endfor %}
         </select>
     </div>
@@ -79,8 +87,11 @@
 
                     <td>
                         {% if front_device %}
+                            <div class="small fw-semibold">
+                                {{ front_device.device_name|default:front_device.serial_number }}
+                            </div>
+
                             {% if member.front_device_status %}
-                                <div class="small fw-semibold">{{ front_device.device_name|default:front_device.serial_number }}</div>
                                 <div class="mt-1">
                                     {% if member.front_device_status.sync_status == 'success' %}
                                         <span class="badge bg-success">Synced</span>
@@ -92,18 +103,28 @@
                                         <span class="badge bg-secondary">Pending</span>
                                     {% endif %}
                                 </div>
+
                                 <div class="small text-muted mt-1">
-                                    Face:
-                                    {% if member.front_device_status.face_added %}Added{% else %}Not added{% endif %}
-                                    |
-                                    FP:
-                                    {% if member.front_device_status.fingerprint_added %}Added{% else %}Not added{% endif %}
-                                    |
-                                    Pwd:
-                                    {% if member.front_device_status.password_added %}Added{% else %}Not added{% endif %}
+                                    {% if member.front_device_status.is_enabled_on_device %}
+                                        Enabled on device
+                                    {% else %}
+                                        Not enabled on device
+                                    {% endif %}
                                 </div>
+
+                                {% if member.front_device_status.last_error %}
+                                    <div class="small text-danger mt-1">
+                                        {{ member.front_device_status.last_error }}
+                                    </div>
+                                {% endif %}
+
+                                {% if member.front_device_status.last_status_checked_at %}
+                                    <div class="small text-muted mt-1">
+                                        Checked {{ member.front_device_status.last_status_checked_at|date:"M d, Y H:i" }}
+                                    </div>
+                                {% endif %}
                             {% else %}
-                                <span class="text-muted">Not synced</span>
+                                <div class="small text-muted mt-1">Not synced</div>
                             {% endif %}
                         {% else %}
                             <span class="text-muted">No device</span>
@@ -112,8 +133,11 @@
 
                     <td>
                         {% if back_device %}
+                            <div class="small fw-semibold">
+                                {{ back_device.device_name|default:back_device.serial_number }}
+                            </div>
+
                             {% if member.back_device_status %}
-                                <div class="small fw-semibold">{{ back_device.device_name|default:back_device.serial_number }}</div>
                                 <div class="mt-1">
                                     {% if member.back_device_status.sync_status == 'success' %}
                                         <span class="badge bg-success">Synced</span>
@@ -125,18 +149,28 @@
                                         <span class="badge bg-secondary">Pending</span>
                                     {% endif %}
                                 </div>
+
                                 <div class="small text-muted mt-1">
-                                    Face:
-                                    {% if member.back_device_status.face_added %}Added{% else %}Not added{% endif %}
-                                    |
-                                    FP:
-                                    {% if member.back_device_status.fingerprint_added %}Added{% else %}Not added{% endif %}
-                                    |
-                                    Pwd:
-                                    {% if member.back_device_status.password_added %}Added{% else %}Not added{% endif %}
+                                    {% if member.back_device_status.is_enabled_on_device %}
+                                        Enabled on device
+                                    {% else %}
+                                        Not enabled on device
+                                    {% endif %}
                                 </div>
+
+                                {% if member.back_device_status.last_error %}
+                                    <div class="small text-danger mt-1">
+                                        {{ member.back_device_status.last_error }}
+                                    </div>
+                                {% endif %}
+
+                                {% if member.back_device_status.last_status_checked_at %}
+                                    <div class="small text-muted mt-1">
+                                        Checked {{ member.back_device_status.last_status_checked_at|date:"M d, Y H:i" }}
+                                    </div>
+                                {% endif %}
                             {% else %}
-                                <span class="text-muted">Not synced</span>
+                                <div class="small text-muted mt-1">Not synced</div>
                             {% endif %}
                         {% else %}
                             <span class="text-muted">No second device</span>
@@ -152,9 +186,13 @@
                                 <form method="post" action="{% url 'members:send_to_device' member.pk front_device.pk %}" class="d-inline">
                                     {% csrf_token %}
                                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-success">
-                                        Send Front
-                                    </button>
+                                    <button type="submit" class="btn btn-sm btn-outline-success">Send Front</button>
+                                </form>
+
+                                <form method="post" action="{% url 'members:check_device_status' member.pk front_device.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-info">Check Front</button>
                                 </form>
                             {% endif %}
 
@@ -162,9 +200,13 @@
                                 <form method="post" action="{% url 'members:send_to_device' member.pk back_device.pk %}" class="d-inline">
                                     {% csrf_token %}
                                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-warning">
-                                        Send Back
-                                    </button>
+                                    <button type="submit" class="btn btn-sm btn-outline-warning">Send Back</button>
+                                </form>
+
+                                <form method="post" action="{% url 'members:check_device_status' member.pk back_device.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-info">Check Back</button>
                                 </form>
                             {% endif %}
 
@@ -172,9 +214,7 @@
                                 <form method="post" action="{% url 'members:send_to_both_devices' member.pk %}" class="d-inline">
                                     {% csrf_token %}
                                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-sm btn-dark">
-                                        Send Both
-                                    </button>
+                                    <button type="submit" class="btn btn-sm btn-dark">Send Both</button>
                                 </form>
                             {% endif %}
                         </div>
