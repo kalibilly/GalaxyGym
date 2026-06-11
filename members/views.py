@@ -1,3 +1,5 @@
+import json
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
@@ -10,6 +12,7 @@ from django.views.generic import CreateView, DetailView, ListView, TemplateView,
 
 from accounts.models import UserAccount
 from accounts.permissions import RoleRequiredMixin
+from attendance.biometric import BiometricSyncService
 from attendance.models import (
     AttendanceLog,
     BiometricDevice,
@@ -18,7 +21,6 @@ from attendance.models import (
     DeviceUserLink,
     MemberBiometricDeviceStatus,
 )
-from attendance.biometric import BiometricSyncService
 from staffs.models import Staff
 
 from .forms import (
@@ -116,7 +118,7 @@ class MemberCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
         self.object.updated_by = self.request.user
         self.object.save()
         form.save_m2m()
-        return super().form_valid(form)
+        return redirect(self.get_success_url())
 
 
 class MemberUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
@@ -131,7 +133,7 @@ class MemberUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         self.object.updated_by = self.request.user
         self.object.save()
         form.save_m2m()
-        return super().form_valid(form)
+        return redirect(self.get_success_url())
 
 
 class MemberDeleteRequestCreateView(RoleRequiredMixin, SuccessMessageMixin, CreateView):
@@ -225,7 +227,11 @@ class MemberDetailView(LoginRequiredMixin, DetailView):
             ]
         ).order_by('due_date')[:5]
         context['recent_payments'] = member.payments.order_by('-payment_date')[:5]
-        context['attendance_history'] = member.attendance_logs.select_related('device').order_by('-check_in_time')[:5]
+        context['attendance_history'] = (
+            member.attendance_logs
+            .select_related('device')
+            .order_by('-check_in_time')[:5]
+        )
         context['outstanding_balance'] = (
             member.invoices.filter(
                 status__in=[
@@ -355,18 +361,19 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
             return False, status_obj, None
 
         service = BiometricSyncService(device)
+        payload = json.dumps(
+            {
+                'member_id': member.member_id,
+                'device_user_id': device_user_id,
+                'full_name': member.full_name,
+            },
+            default=str,
+        )
         command = self.log_command(
             device=device,
             member=member,
             command=BiometricDeviceCommand.COMMAND_ENROLL_USER,
-            payload=json.dumps(
-                {
-                    'member_id': member.member_id,
-                    'device_user_id': device_user_id,
-                    'full_name': member.full_name,
-                },
-                default=str,
-            ),
+            payload=payload,
         )
 
         result = service.push_enrollment(member, device_user_id)
@@ -413,7 +420,7 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
             action=BiometricSyncLog.ACTION_ENROLL,
             device_user_id=device_user_id,
             success=bool(result.get('ok')),
-            payload=command.payload,
+            payload=payload,
             response=command.response_payload,
             notes=status_obj.notes,
         )
@@ -422,8 +429,8 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
 
     def perform_status_check(self, member, device):
         status_obj = self.get_or_create_status(member, device)
-        service = BiometricSyncService(device)
         device_user_id = self.get_target_device_user_id(member)
+        service = BiometricSyncService(device)
 
         result = service.check_user(member, device_user_id=device_user_id)
 
@@ -440,6 +447,7 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
             status_obj.sync_status = MemberBiometricDeviceStatus.SYNC_PENDING
             status_obj.notes = 'Device responded, but member was not found on this biometric device.'
         else:
+            status_obj.sync_status = MemberBiometricDeviceStatus.SYNC_FAILED
             status_obj.notes = 'Device status check failed.'
 
         status_obj.save(
@@ -459,7 +467,13 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
             action=BiometricSyncLog.ACTION_STATUS_CHECK,
             device_user_id=device_user_id,
             success=bool(result.get('ok')),
-            payload=json.dumps({'member_id': member.member_id, 'device_user_id': device_user_id}, default=str),
+            payload=json.dumps(
+                {
+                    'member_id': member.member_id,
+                    'device_user_id': device_user_id,
+                },
+                default=str,
+            ),
             response=json.dumps(result, default=str),
             notes=status_obj.notes,
         )
