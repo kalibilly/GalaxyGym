@@ -16,26 +16,42 @@
                         <span class="fw-semibold text-white">{{ member.device_user_id|default:"Not assigned" }}</span>
                     </p>
                 </div>
+
                 <div class="d-flex flex-wrap gap-2">
                     <a href="{% url 'members:update' member.pk %}" class="btn btn-primary">Edit Member</a>
 
                     {% if front_device %}
-                        <form method="post" action="{% url 'members:send_to_device' member.pk front_device.pk %}">
+                        <form method="post" action="{% url 'members:send_to_device' member.pk front_device.pk %}" class="d-inline">
                             {% csrf_token %}
+                            <input type="hidden" name="next" value="{% url 'members:detail' member.pk %}">
                             <button type="submit" class="btn btn-outline-success">Send to Front Device</button>
+                        </form>
+
+                        <form method="post" action="{% url 'members:check_device_status' member.pk front_device.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{% url 'members:detail' member.pk %}">
+                            <button type="submit" class="btn btn-outline-info">Check Front Status</button>
                         </form>
                     {% endif %}
 
                     {% if back_device %}
-                        <form method="post" action="{% url 'members:send_to_device' member.pk back_device.pk %}">
+                        <form method="post" action="{% url 'members:send_to_device' member.pk back_device.pk %}" class="d-inline">
                             {% csrf_token %}
+                            <input type="hidden" name="next" value="{% url 'members:detail' member.pk %}">
                             <button type="submit" class="btn btn-outline-warning">Send to Back Device</button>
+                        </form>
+
+                        <form method="post" action="{% url 'members:check_device_status' member.pk back_device.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{% url 'members:detail' member.pk %}">
+                            <button type="submit" class="btn btn-outline-info">Check Back Status</button>
                         </form>
                     {% endif %}
 
                     {% if front_device or back_device %}
-                        <form method="post" action="{% url 'members:send_to_both_devices' member.pk %}">
+                        <form method="post" action="{% url 'members:send_to_both_devices' member.pk %}" class="d-inline">
                             {% csrf_token %}
+                            <input type="hidden" name="next" value="{% url 'members:detail' member.pk %}">
                             <button type="submit" class="btn btn-dark">Send to Both Devices</button>
                         </form>
                     {% endif %}
@@ -54,7 +70,15 @@
                     <dd class="col-sm-8">{{ member.email|default:"—" }}</dd>
 
                     <dt class="col-sm-4">Status</dt>
-                    <dd class="col-sm-8">{{ member.get_status_display }}</dd>
+                    <dd class="col-sm-8">
+                        {% if member.status == 'active' %}
+                            <span class="badge bg-success">{{ member.get_status_display }}</span>
+                        {% elif member.status == 'inactive' %}
+                            <span class="badge bg-secondary">{{ member.get_status_display }}</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">{{ member.get_status_display }}</span>
+                        {% endif %}
+                    </dd>
 
                     <dt class="col-sm-4">Created By</dt>
                     <dd class="col-sm-8">
@@ -87,7 +111,9 @@
                     </dd>
 
                     <dt class="col-sm-4">Emergency Contact</dt>
-                    <dd class="col-sm-8">{{ member.emergency_contact_name|default:"—" }} — {{ member.emergency_contact_phone|default:"—" }}</dd>
+                    <dd class="col-sm-8">
+                        {{ member.emergency_contact_name|default:"—" }} — {{ member.emergency_contact_phone|default:"—" }}
+                    </dd>
 
                     <dt class="col-sm-4">Address</dt>
                     <dd class="col-sm-8">{{ member.address|linebreaksbr|default:"No address provided." }}</dd>
@@ -112,7 +138,8 @@
                                                 <div>
                                                     <h6 class="mb-1">{{ device.device_name|default:device.serial_number }}</h6>
                                                     <div class="small text-white-50">
-                                                        {{ device.get_device_type_display }}{% if device.last_known_ip %} • {{ device.last_known_ip }}{% endif %}
+                                                        {{ device.get_device_type_display }}
+                                                        {% if device.last_known_ip %} • {{ device.last_known_ip }}{% endif %}
                                                     </div>
                                                 </div>
 
@@ -133,7 +160,7 @@
 
                                             <dl class="row small mb-3">
                                                 <dt class="col-5">Device User ID</dt>
-                                                <dd class="col-7">{{ status.device_user_id|default:member.device_user_id|default:"—" }}</dd>
+                                                <dd class="col-7">{{ member.device_user_id|default:"—" }}</dd>
 
                                                 <dt class="col-5">Enabled</dt>
                                                 <dd class="col-7">
@@ -141,33 +168,6 @@
                                                         <span class="text-success">Yes</span>
                                                     {% else %}
                                                         <span class="text-white-50">No</span>
-                                                    {% endif %}
-                                                </dd>
-
-                                                <dt class="col-5">Face</dt>
-                                                <dd class="col-7">
-                                                    {% if status and status.face_added %}
-                                                        <span class="text-success">Added</span>
-                                                    {% else %}
-                                                        <span class="text-white-50">Not added</span>
-                                                    {% endif %}
-                                                </dd>
-
-                                                <dt class="col-5">Fingerprint</dt>
-                                                <dd class="col-7">
-                                                    {% if status and status.fingerprint_added %}
-                                                        <span class="text-success">Added</span>
-                                                    {% else %}
-                                                        <span class="text-white-50">Not added</span>
-                                                    {% endif %}
-                                                </dd>
-
-                                                <dt class="col-5">Password</dt>
-                                                <dd class="col-7">
-                                                    {% if status and status.password_added %}
-                                                        <span class="text-success">Added</span>
-                                                    {% else %}
-                                                        <span class="text-white-50">Not added</span>
                                                     {% endif %}
                                                 </dd>
 
@@ -203,13 +203,15 @@
                                             {% endif %}
 
                                             <div class="d-flex flex-wrap gap-2">
-                                                <form method="post" action="{% url 'members:send_to_device' member.pk device.pk %}">
+                                                <form method="post" action="{% url 'members:send_to_device' member.pk device.pk %}" class="d-inline">
                                                     {% csrf_token %}
+                                                    <input type="hidden" name="next" value="{% url 'members:detail' member.pk %}">
                                                     <button type="submit" class="btn btn-sm btn-outline-success">Send to Device</button>
                                                 </form>
 
-                                                <form method="post" action="{% url 'members:check_device_status' member.pk device.pk %}">
+                                                <form method="post" action="{% url 'members:check_device_status' member.pk device.pk %}" class="d-inline">
                                                     {% csrf_token %}
+                                                    <input type="hidden" name="next" value="{% url 'members:detail' member.pk %}">
                                                     <button type="submit" class="btn btn-sm btn-outline-info">Check Status</button>
                                                 </form>
                                             </div>
@@ -243,7 +245,9 @@
                             <li class="list-group-item d-flex justify-content-between align-items-center p-2">
                                 <div>
                                     <strong>{{ membership.plan.name }}</strong>
-                                    <div class="small text-white-50">{{ membership.start_date|date:"M d, Y" }} — {{ membership.end_date|date:"M d, Y" }}</div>
+                                    <div class="small text-white-50">
+                                        {{ membership.start_date|date:"M d, Y" }} — {{ membership.end_date|date:"M d, Y" }}
+                                    </div>
                                 </div>
                                 <span class="badge {% if membership.status == 'active' %}bg-success{% elif membership.status == 'expiring_soon' %}bg-warning{% else %}bg-secondary{% endif %}">
                                     {{ membership.get_status_display }}
@@ -270,6 +274,7 @@
                     </div>
                 </div>
             </div>
+
             <div class="col-md-6">
                 <div class="card h-100">
                     <div class="card-body">
