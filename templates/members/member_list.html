@@ -6,14 +6,14 @@
 <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
         <h1 class="h4 mb-0">Members</h1>
-        <p class="text-muted">Track membership profiles and assigned staff.</p>
+        <p class="text-muted mb-0">Track membership profiles, assigned staff, and biometric device sync status.</p>
     </div>
     <a href="{% url 'members:create' %}" class="btn btn-primary">Add Member</a>
 </div>
 
 <form method="get" class="row gx-2 gy-3 mb-4">
     <div class="col-sm-4">
-        <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Search member ID, name, phone, email...">
+        <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Search member ID, device ID, name, phone, email...">
     </div>
     <div class="col-sm-3">
         <select name="status" class="form-select">
@@ -41,18 +41,24 @@
         <thead>
             <tr>
                 <th>Member ID</th>
+                <th>Device User ID</th>
                 <th>Name</th>
                 <th>Phone</th>
                 <th>Assigned Staff</th>
                 <th>Status</th>
-                <th></th>
+                <th>Front Device</th>
+                <th>Back Device</th>
+                <th class="text-end">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for member in member_list %}
                 <tr>
                     <td>{{ member.member_id }}</td>
-                    <td><a href="{% url 'members:detail' member.pk %}">{{ member.full_name }}</a></td>
+                    <td>{{ member.device_user_id|default:"—" }}</td>
+                    <td>
+                        <a href="{% url 'members:detail' member.pk %}">{{ member.full_name }}</a>
+                    </td>
                     <td>{{ member.phone_number }}</td>
                     <td>
                         {% if member.assigned_staff %}
@@ -67,16 +73,116 @@
                         {% elif member.status == 'inactive' %}
                             <span class="badge bg-secondary">{{ member.get_status_display }}</span>
                         {% else %}
-                            <span class="badge bg-warning">{{ member.get_status_display }}</span>
+                            <span class="badge bg-warning text-dark">{{ member.get_status_display }}</span>
                         {% endif %}
                     </td>
+
+                    <td>
+                        {% if front_device %}
+                            {% if member.front_device_status %}
+                                <div class="small fw-semibold">{{ front_device.device_name|default:front_device.serial_number }}</div>
+                                <div class="mt-1">
+                                    {% if member.front_device_status.sync_status == 'success' %}
+                                        <span class="badge bg-success">Synced</span>
+                                    {% elif member.front_device_status.sync_status == 'sent' %}
+                                        <span class="badge bg-info text-dark">Sent</span>
+                                    {% elif member.front_device_status.sync_status == 'failed' %}
+                                        <span class="badge bg-danger">Failed</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Pending</span>
+                                    {% endif %}
+                                </div>
+                                <div class="small text-muted mt-1">
+                                    Face:
+                                    {% if member.front_device_status.face_added %}Added{% else %}Not added{% endif %}
+                                    |
+                                    FP:
+                                    {% if member.front_device_status.fingerprint_added %}Added{% else %}Not added{% endif %}
+                                    |
+                                    Pwd:
+                                    {% if member.front_device_status.password_added %}Added{% else %}Not added{% endif %}
+                                </div>
+                            {% else %}
+                                <span class="text-muted">Not synced</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted">No device</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if back_device %}
+                            {% if member.back_device_status %}
+                                <div class="small fw-semibold">{{ back_device.device_name|default:back_device.serial_number }}</div>
+                                <div class="mt-1">
+                                    {% if member.back_device_status.sync_status == 'success' %}
+                                        <span class="badge bg-success">Synced</span>
+                                    {% elif member.back_device_status.sync_status == 'sent' %}
+                                        <span class="badge bg-info text-dark">Sent</span>
+                                    {% elif member.back_device_status.sync_status == 'failed' %}
+                                        <span class="badge bg-danger">Failed</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Pending</span>
+                                    {% endif %}
+                                </div>
+                                <div class="small text-muted mt-1">
+                                    Face:
+                                    {% if member.back_device_status.face_added %}Added{% else %}Not added{% endif %}
+                                    |
+                                    FP:
+                                    {% if member.back_device_status.fingerprint_added %}Added{% else %}Not added{% endif %}
+                                    |
+                                    Pwd:
+                                    {% if member.back_device_status.password_added %}Added{% else %}Not added{% endif %}
+                                </div>
+                            {% else %}
+                                <span class="text-muted">Not synced</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted">No second device</span>
+                        {% endif %}
+                    </td>
+
                     <td class="text-end">
-                        <a href="{% url 'members:update' member.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        <div class="d-flex flex-wrap gap-2 justify-content-end">
+                            <a href="{% url 'members:update' member.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                            <a href="{% url 'members:detail' member.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+
+                            {% if front_device %}
+                                <form method="post" action="{% url 'members:send_to_device' member.pk front_device.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        Send Front
+                                    </button>
+                                </form>
+                            {% endif %}
+
+                            {% if back_device %}
+                                <form method="post" action="{% url 'members:send_to_device' member.pk back_device.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-warning">
+                                        Send Back
+                                    </button>
+                                </form>
+                            {% endif %}
+
+                            {% if front_device or back_device %}
+                                <form method="post" action="{% url 'members:send_to_both_devices' member.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button type="submit" class="btn btn-sm btn-dark">
+                                        Send Both
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
                     </td>
                 </tr>
             {% empty %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted">No members found.</td>
+                    <td colspan="9" class="text-center text-muted">No members found.</td>
                 </tr>
             {% endfor %}
         </tbody>
