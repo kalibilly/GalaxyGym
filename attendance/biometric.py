@@ -1,4 +1,4 @@
-import abc
+import json
 import logging
 from typing import Any, Dict, Optional
 
@@ -9,8 +9,11 @@ from members.models import Member
 from staffs.models import Staff
 
 from .models import (
+    AttendanceLog,
     BiometricDevice,
+    BiometricDeviceCommand,
     BiometricSyncLog,
+    DeviceUserLink,
     MemberBiometricDeviceStatus,
     StaffBiometricDeviceStatus,
 )
@@ -22,105 +25,9 @@ class BiometricSyncError(Exception):
     pass
 
 
-class BiometricAdapter(abc.ABC):
-    device_type = BiometricDevice.DeviceType.UNKNOWN
-
-    def __init__(self, device: BiometricDevice):
-        self.device = device
-
-    @classmethod
-    def supports_device(cls, device: BiometricDevice) -> bool:
-        return cls.device_type == device.device_type
-
-    @classmethod
-    def identify_from_device(cls, device: BiometricDevice) -> bool:
-        return cls.supports_device(device)
-
-    def probe_status(self) -> Dict[str, Any]:
-        return {
-            'ok': False,
-            'device_type': self.device.device_type,
-            'serial_number': self.device.serial_number,
-            'message': 'Adapter implementation unavailable.',
-        }
-
-    def fetch_enrolled_users(self) -> Dict[str, Any]:
-        return {
-            'ok': False,
-            'message': 'Fetch enrolled users not implemented for this device adapter.',
-        }
-
-    def push_enrollment(self, target: Any, device_user_id: str) -> Dict[str, Any]:
-        return {
-            'ok': False,
-            'message': 'Enrollment push is not implemented for this device adapter.',
-        }
-
-    def delete_enrollment(self, target: Any, device_user_id: str) -> Dict[str, Any]:
-        return {
-            'ok': False,
-            'message': 'Enrollment delete is not implemented for this device adapter.',
-        }
-
-
-class MB20Adapter(BiometricAdapter):
-    device_type = BiometricDevice.DeviceType.MB20
-
-    @classmethod
-    def identify_from_device(cls, device: BiometricDevice) -> bool:
-        normalized = (device.device_name or device.serial_number or '').lower()
-        return 'mb20' in normalized or normalized.startswith('mb')
-
-    def probe_status(self) -> Dict[str, Any]:
-        return {
-            'ok': True,
-            'device_type': self.device.device_type,
-            'serial_number': self.device.serial_number,
-            'model': 'MB20',
-            'message': 'MB20 device adapter is available. Implement device-specific communication for production use.',
-        }
-
-
-class AiFaceAdapter(BiometricAdapter):
-    device_type = BiometricDevice.DeviceType.AIFACE
-
-    @classmethod
-    def identify_from_device(cls, device: BiometricDevice) -> bool:
-        normalized = (device.device_name or device.serial_number or '').lower()
-        return 'aiface' in normalized or normalized.startswith('af')
-
-    def probe_status(self) -> Dict[str, Any]:
-        return {
-            'ok': True,
-            'device_type': self.device.device_type,
-            'serial_number': self.device.serial_number,
-            'model': 'AiFace',
-            'message': 'AiFace device adapter is available. Implement device-specific communication for production use.',
-        }
-
-
-class UnknownDeviceAdapter(BiometricAdapter):
-    def probe_status(self) -> Dict[str, Any]:
-        return {
-            'ok': False,
-            'device_type': self.device.device_type,
-            'serial_number': self.device.serial_number,
-            'message': 'Unknown biometric device type. Verify the device serial and device_name metadata.',
-        }
-
-
-def get_adapter_for_device(device: BiometricDevice) -> BiometricAdapter:
-    if device.device_type == BiometricDevice.DeviceType.MB20 or MB20Adapter.identify_from_device(device):
-        return MB20Adapter(device)
-    if device.device_type == BiometricDevice.DeviceType.AIFACE or AiFaceAdapter.identify_from_device(device):
-        return AiFaceAdapter(device)
-    return UnknownDeviceAdapter(device)
-
-
 class BiometricSyncService:
     def __init__(self, device: BiometricDevice):
         self.device = device
-        self.adapter = get_adapter_for_device(device)
 
     def create_sync_log(
         self,
@@ -134,9 +41,9 @@ class BiometricSyncService:
     ) -> BiometricSyncLog:
         person_type = ''
         if isinstance(target, Member):
-            person_type = BiometricSyncLog.person_type.field.choices[0][0] if False else 'member'
+            person_type = AttendanceLog.PersonType.MEMBER
         elif isinstance(target, Staff):
-            person_type = 'staff'
+            person_type = AttendanceLog.PersonType.STAFF
 
         return BiometricSyncLog.objects.create(
             device=self.device,
@@ -146,8 +53,8 @@ class BiometricSyncService:
             action=action,
             device_user_id=device_user_id or '',
             success=success,
-            payload=str(payload) if payload is not None else '',
-            response=str(response) if response is not None else '',
+            payload=json.dumps(payload, default=str) if payload is not None else '',
+            response=json.dumps(response, default=str) if response is not None else '',
             notes=notes or '',
         )
 
@@ -189,7 +96,7 @@ class BiometricSyncService:
 
     def reconcile_device_user(self, target: Any, reported_device_user_id: str) -> Dict[str, Any]:
         if not target or not reported_device_user_id:
-            raise BiometricSyncError('Both target and reported device_user_id are required.')
+            raise BiometricSyncError('Both target and reported_device_user_id are required.')
 
         current_id = getattr(target, 'device_user_id', None)
         if not current_id:
@@ -221,131 +128,175 @@ class BiometricSyncService:
             'device_user_id': current_id,
         }
 
-    def _update_status_after_push(self, target: Any, result: Dict[str, Any], device_user_id: str):
+    def _get_member_status(self, member: Member):
+        status_obj, _ = MemberBiometricDeviceStatus.objects.get_or_create(
+            member=member,
+            device=self.device,
+            defaults={'device_user_id': member.device_user_id or member.member_id},
+        )
+        expected_id = member.device_user_id or member.member_id
+        if expected_id and status_obj.device_user_id != expected_id:
+            status_obj.device_user_id = expected_id
+            status_obj.save(update_fields=['device_user_id'])
+        return status_obj
+
+    def _get_staff_status(self, staff: Staff):
+        status_obj, _ = StaffBiometricDeviceStatus.objects.get_or_create(
+            staff=staff,
+            device=self.device,
+            defaults={'device_user_id': staff.device_user_id or staff.staff_id},
+        )
+        expected_id = staff.device_user_id or staff.staff_id
+        if expected_id and status_obj.device_user_id != expected_id:
+            status_obj.device_user_id = expected_id
+            status_obj.save(update_fields=['device_user_id'])
+        return status_obj
+
+    def _ensure_link(self, target: Any, device_user_id: str):
+        if not device_user_id:
+            return None
+
         if isinstance(target, Member):
-            status_obj, _ = MemberBiometricDeviceStatus.objects.get_or_create(
-                member=target,
-                device=self.device,
-                defaults={'device_user_id': device_user_id},
+            link, _ = DeviceUserLink.objects.get_or_create(
+                device_user_id=device_user_id,
+                defaults={
+                    'member': target,
+                    'person_type': DeviceUserLink.PersonType.MEMBER,
+                    'is_active': True,
+                },
             )
-        elif isinstance(target, Staff):
-            status_obj, _ = StaffBiometricDeviceStatus.objects.get_or_create(
-                staff=target,
-                device=self.device,
-                defaults={'device_user_id': device_user_id},
+            if link.member_id != target.id or link.staff_id is not None or not link.is_active:
+                link.member = target
+                link.staff = None
+                link.person_type = DeviceUserLink.PersonType.MEMBER
+                link.is_active = True
+                link.save(update_fields=['member', 'staff', 'person_type', 'is_active'])
+            return link
+
+        if isinstance(target, Staff):
+            link, _ = DeviceUserLink.objects.get_or_create(
+                device_user_id=device_user_id,
+                defaults={
+                    'staff': target,
+                    'person_type': DeviceUserLink.PersonType.STAFF,
+                    'is_active': True,
+                },
             )
-        else:
-            return
+            if link.staff_id != target.id or link.member_id is not None or not link.is_active:
+                link.staff = target
+                link.member = None
+                link.person_type = DeviceUserLink.PersonType.STAFF
+                link.is_active = True
+                link.save(update_fields=['staff', 'member', 'person_type', 'is_active'])
+            return link
 
-        if not status_obj.device_user_id:
-            status_obj.device_user_id = device_user_id
-
-        status_obj.last_status_checked_at = timezone.now()
-
-        if result.get('ok'):
-            status_obj.sync_status = status_obj.SyncStatus.SUCCESS
-            status_obj.is_enabled_on_device = True
-            status_obj.last_synced_at = timezone.now()
-            status_obj.last_error = ''
-        else:
-            status_obj.sync_status = status_obj.SyncStatus.FAILED
-            status_obj.is_enabled_on_device = False
-            status_obj.last_error = result.get('message', 'Enrollment failed.')
-
-        if 'face_added' in result:
-            status_obj.face_added = bool(result['face_added'])
-        if 'fingerprint_added' in result:
-            status_obj.fingerprint_added = bool(result['fingerprint_added'])
-        if 'password_added' in result:
-            status_obj.password_added = bool(result['password_added'])
-
-        update_fields = [
-            'device_user_id',
-            'last_status_checked_at',
-            'sync_status',
-            'is_enabled_on_device',
-            'last_synced_at',
-            'last_error',
-            'face_added',
-            'fingerprint_added',
-            'password_added',
-        ]
-        status_obj.save(update_fields=update_fields)
+        return None
 
     def push_enrollment(self, target: Any, device_user_id: str) -> Dict[str, Any]:
-        if isinstance(self.adapter, UnknownDeviceAdapter):
-            result = self.adapter.push_enrollment(target, device_user_id)
-            self.create_sync_log(
-                action=BiometricSyncLog.Action.ENROLLMENT,
-                payload={'target': str(target), 'device_user_id': device_user_id},
-                response=result,
-                target=target,
-                device_user_id=device_user_id,
-                success=result.get('ok', False),
-                notes='Adapter does not support enrollment yet.',
-            )
-            self._update_status_after_push(target, result, device_user_id)
-            return result
+        if not target or not device_user_id:
+            return {'ok': False, 'message': 'Target and device_user_id are required.'}
 
-        assignment = self.reconcile_device_user(target, device_user_id)
-        if not assignment['ok']:
+        try:
+            assignment = self.reconcile_device_user(target, device_user_id)
+        except BiometricSyncError as exc:
+            return {'ok': False, 'message': str(exc)}
+
+        if not assignment.get('ok'):
             self.create_sync_log(
                 action=BiometricSyncLog.Action.CONFLICT,
-                payload={'target': str(target), 'reported_device_user_id': device_user_id},
+                payload={'target': str(target), 'device_user_id': device_user_id},
                 response=assignment,
                 target=target,
                 device_user_id=device_user_id,
                 success=False,
                 notes='Conflict while reconciling device user mapping.',
             )
-            self._update_status_after_push(
-                target,
-                {'ok': False, 'message': assignment.get('reason', 'Conflict while reconciling mapping.')},
-                device_user_id,
-            )
             return assignment
 
-        result = self.adapter.push_enrollment(target, device_user_id)
+        if isinstance(target, Member):
+            status_obj = self._get_member_status(target)
+        else:
+            status_obj = self._get_staff_status(target)
+
+        payload = {
+            'target': str(target),
+            'device_user_id': device_user_id,
+            'device_serial': self.device.serial_number,
+            'device_name': self.device.device_name,
+        }
+
+        command = BiometricDeviceCommand.objects.create(
+            device=self.device,
+            member=target if isinstance(target, Member) else None,
+            staff=target if isinstance(target, Staff) else None,
+            person_type=AttendanceLog.PersonType.MEMBER if isinstance(target, Member) else AttendanceLog.PersonType.STAFF,
+            command=BiometricDeviceCommand.CommandType.SYNC_USER,
+            device_user_id=device_user_id,
+            payload=json.dumps(payload, default=str),
+            status=BiometricDeviceCommand.Status.PENDING,
+            queued_at=timezone.now(),
+            notes='Queued for device polling.',
+        )
+
+        status_obj.sync_status = status_obj.SyncStatus.PENDING
+        status_obj.last_status_checked_at = timezone.now()
+        status_obj.last_error = ''
+        status_obj.notes = 'Enrollment queued and waiting for device poll.'
+        status_obj.save(update_fields=['sync_status', 'last_status_checked_at', 'last_error', 'notes'])
+
+        self._ensure_link(target, device_user_id)
+
+        result = {
+            'ok': True,
+            'queued': True,
+            'message': 'Enrollment command queued successfully.',
+            'command_id': command.pk,
+            'device_serial': self.device.serial_number,
+            'device_user_id': device_user_id,
+        }
+
         self.create_sync_log(
             action=BiometricSyncLog.Action.ENROLLMENT,
-            payload={'target': str(target), 'device_user_id': device_user_id},
+            payload=payload,
             response=result,
             target=target,
             device_user_id=device_user_id,
-            success=result.get('ok', False),
+            success=True,
+            notes='Enrollment queued for device polling.',
         )
-        self._update_status_after_push(target, result, device_user_id)
         return result
 
     def probe(self) -> Dict[str, Any]:
-        status = self.adapter.probe_status()
+        result = {
+            'ok': True,
+            'device_type': self.device.device_type,
+            'serial_number': self.device.serial_number,
+            'device_name': self.device.device_name,
+            'last_seen_at': self.device.last_seen_at.isoformat() if self.device.last_seen_at else None,
+            'last_known_ip': self.device.last_known_ip,
+            'message': 'Device record is available. Use heartbeat timestamps to verify communication.',
+        }
         self.device.last_sync_at = timezone.now()
         self.device.save(update_fields=['last_sync_at'])
         self.create_sync_log(
             action=BiometricSyncLog.Action.DEVICE_HEARTBEAT,
-            payload={'status': status},
-            response=status,
-            device_user_id='',
+            payload={'status_check': True},
+            response=result,
+            success=True,
         )
-        return status
+        return result
 
     @transaction.atomic
     def synchronize_device(self) -> Dict[str, Any]:
-        if isinstance(self.adapter, UnknownDeviceAdapter):
-            message = 'Unknown device adapter. No active sync available.'
-            self.create_sync_log(
-                action=BiometricSyncLog.Action.DEVICE_SYNC,
-                payload={'reason': message},
-                response={'ok': False, 'message': message},
-                success=False,
-            )
-            return {'ok': False, 'message': message}
-
-        enrolled = self.adapter.fetch_enrolled_users()
+        result = {
+            'ok': True,
+            'message': 'Synchronization uses queued commands and device callbacks in this integration.',
+            'device_serial': self.device.serial_number,
+        }
         self.create_sync_log(
             action=BiometricSyncLog.Action.DEVICE_SYNC,
-            payload={'fetch_enrolled_users': enrolled},
-            response=enrolled,
-            success=enrolled.get('ok', False),
+            payload={'mode': 'queued-command-polling'},
+            response=result,
+            success=True,
         )
-        return enrolled
+        return result
