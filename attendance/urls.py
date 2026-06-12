@@ -20,6 +20,7 @@ urlpatterns = [
     path('device/bridge-entry/', views.bridge_entry, name='bridge_entry'),
     path('device/access-sync/', views.access_sync, name='access_sync'),
 
-    path('biometric/get-request/', views.biometric_get_request, name='biometric_get_request'),
-    path('biometric/endpoint/', views.biometric_endpoint, name='biometric_endpoint'),
+    # ADMS / PUSH endpoints for eSSL MB20 and eSSL AiFace Orcus
+    path('iclock/getrequest/', views.iclock_getrequest, name='iclock_getrequest'),
+    path('iclock/cdata/', views.iclock_cdata, name='iclock_cdata'),
 ]
