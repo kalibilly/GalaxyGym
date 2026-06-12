@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('attendance', '0006_your_existing_migration_name'),
+        ('attendance', '0006_add_biometricdevice_device_type'),
     ]
 
     operations = [
