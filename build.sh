@@ -11,6 +11,7 @@ python manage.py migrate attendance 0004_biometricdevice_alter_attendancelog_dev
 python manage.py migrate members 0004_member_wallet_balance --fake --noinput
 python manage.py migrate attendance 0005 --fake --noinput
 python manage.py migrate attendance 0006 --fake --noinput
+python manage.py migrate attendance 0007_add_missing_biometricdevice_columns --fake --noinput
 python manage.py migrate --noinput
 
 if [ "$DJANGO_SUPERUSER_PASSWORD" ] && [ "$DJANGO_SUPERUSER_LOGIN_ID" ] && [ "$DJANGO_SUPERUSER_EMAIL" ] && [ "$DJANGO_SUPERUSER_PHONE_NUMBER" ]; then
