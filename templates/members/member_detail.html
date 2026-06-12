@@ -154,17 +154,50 @@
                                                         <span class="badge bg-secondary">Pending</span>
                                                     {% endif %}
                                                 {% else %}
-                                                    <span class="badge bg-secondary">Not synced</span>
+                                                    <span class="badge bg-secondary">No status</span>
                                                 {% endif %}
                                             </div>
 
                                             <dl class="row small mb-3">
                                                 <dt class="col-5">Device User ID</dt>
-                                                <dd class="col-7">{{ member.device_user_id|default:"—" }}</dd>
+                                                <dd class="col-7">
+                                                    {% if status and status.device_user_id %}
+                                                        {{ status.device_user_id }}
+                                                    {% else %}
+                                                        {{ member.device_user_id|default:"—" }}
+                                                    {% endif %}
+                                                </dd>
 
                                                 <dt class="col-5">Enabled</dt>
                                                 <dd class="col-7">
                                                     {% if status and status.is_enabled_on_device %}
+                                                        <span class="text-success">Yes</span>
+                                                    {% else %}
+                                                        <span class="text-white-50">No</span>
+                                                    {% endif %}
+                                                </dd>
+
+                                                <dt class="col-5">Face Added</dt>
+                                                <dd class="col-7">
+                                                    {% if status and status.face_added %}
+                                                        <span class="text-success">Yes</span>
+                                                    {% else %}
+                                                        <span class="text-white-50">No</span>
+                                                    {% endif %}
+                                                </dd>
+
+                                                <dt class="col-5">Fingerprint Added</dt>
+                                                <dd class="col-7">
+                                                    {% if status and status.fingerprint_added %}
+                                                        <span class="text-success">Yes</span>
+                                                    {% else %}
+                                                        <span class="text-white-50">No</span>
+                                                    {% endif %}
+                                                </dd>
+
+                                                <dt class="col-5">Password Added</dt>
+                                                <dd class="col-7">
+                                                    {% if status and status.password_added %}
                                                         <span class="text-success">Yes</span>
                                                     {% else %}
                                                         <span class="text-white-50">No</span>
@@ -292,6 +325,123 @@
                 </div>
             </div>
         </div>
+
+        {% if recent_sync_logs %}
+            <div class="card mb-3">
+                <div class="card-header">Recent Biometric Logs</div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Device</th>
+                                    <th>Action</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_sync_logs %}
+                                    <tr>
+                                        <td>{{ log.created_at|date:"M d, Y H:i" }}</td>
+                                        <td>{{ log.device|default:"—" }}</td>
+                                        <td>{{ log.get_action_display }}</td>
+                                        <td>
+                                            {% if log.success %}
+                                                <span class="badge bg-success">Success</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">Failed</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% if log.notes %}
+                                        <tr>
+                                            <td colspan="4" class="small text-white-50 pt-0">
+                                                {{ log.notes }}
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        {% if recent_device_commands %}
+            <div class="card mb-3">
+                <div class="card-header">Recent Device Commands</div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Queued</th>
+                                    <th>Device</th>
+                                    <th>Command</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for command in recent_device_commands %}
+                                    <tr>
+                                        <td>{{ command.queued_at|date:"M d, Y H:i" }}</td>
+                                        <td>{{ command.device }}</td>
+                                        <td>{{ command.get_command_display }}</td>
+                                        <td>
+                                            {% if command.status == 'success' %}
+                                                <span class="badge bg-success">Success</span>
+                                            {% elif command.status == 'failed' %}
+                                                <span class="badge bg-danger">Failed</span>
+                                            {% elif command.status == 'pending' %}
+                                                <span class="badge bg-secondary">Pending</span>
+                                            {% elif command.status == 'sent' %}
+                                                <span class="badge bg-info text-dark">Sent</span>
+                                            {% else %}
+                                                <span class="badge bg-warning text-dark">{{ command.get_status_display }}</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% if command.error_message %}
+                                        <tr>
+                                            <td colspan="4" class="small text-danger pt-0">
+                                                {{ command.error_message }}
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        {% if device_user_links %}
+            <div class="card mb-3">
+                <div class="card-header">Device User Links</div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        {% for link in device_user_links %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-semibold">{{ link.device_user_id }}</div>
+                                    {% if link.notes %}
+                                        <div class="small text-white-50">{{ link.notes }}</div>
+                                    {% endif %}
+                                </div>
+                                {% if link.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        {% endif %}
 
         <div class="card mb-3">
             <div class="card-header">Recent Attendance</div>
