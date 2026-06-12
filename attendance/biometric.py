@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional
 
 from django.db import transaction
 from django.utils import timezone
@@ -8,7 +8,12 @@ from django.utils import timezone
 from members.models import Member
 from staffs.models import Staff
 
-from .models import BiometricDevice, BiometricSyncLog
+from .models import (
+    BiometricDevice,
+    BiometricSyncLog,
+    MemberBiometricDeviceStatus,
+    StaffBiometricDeviceStatus,
+)
 
 logger = logging.getLogger('biometric')
 
@@ -18,7 +23,7 @@ class BiometricSyncError(Exception):
 
 
 class BiometricAdapter(abc.ABC):
-    device_type = BiometricDevice.TYPE_UNKNOWN
+    device_type = BiometricDevice.DeviceType.UNKNOWN
 
     def __init__(self, device: BiometricDevice):
         self.device = device
@@ -59,7 +64,7 @@ class BiometricAdapter(abc.ABC):
 
 
 class MB20Adapter(BiometricAdapter):
-    device_type = BiometricDevice.TYPE_MB20
+    device_type = BiometricDevice.DeviceType.MB20
 
     @classmethod
     def identify_from_device(cls, device: BiometricDevice) -> bool:
@@ -77,7 +82,7 @@ class MB20Adapter(BiometricAdapter):
 
 
 class AiFaceAdapter(BiometricAdapter):
-    device_type = BiometricDevice.TYPE_AIFACE
+    device_type = BiometricDevice.DeviceType.AIFACE
 
     @classmethod
     def identify_from_device(cls, device: BiometricDevice) -> bool:
@@ -105,9 +110,9 @@ class UnknownDeviceAdapter(BiometricAdapter):
 
 
 def get_adapter_for_device(device: BiometricDevice) -> BiometricAdapter:
-    if device.device_type == BiometricDevice.TYPE_MB20 or MB20Adapter.identify_from_device(device):
+    if device.device_type == BiometricDevice.DeviceType.MB20 or MB20Adapter.identify_from_device(device):
         return MB20Adapter(device)
-    if device.device_type == BiometricDevice.TYPE_AIFACE or AiFaceAdapter.identify_from_device(device):
+    if device.device_type == BiometricDevice.DeviceType.AIFACE or AiFaceAdapter.identify_from_device(device):
         return AiFaceAdapter(device)
     return UnknownDeviceAdapter(device)
 
@@ -129,7 +134,7 @@ class BiometricSyncService:
     ) -> BiometricSyncLog:
         person_type = ''
         if isinstance(target, Member):
-            person_type = 'member'
+            person_type = BiometricSyncLog.person_type.field.choices[0][0] if False else 'member'
         elif isinstance(target, Staff):
             person_type = 'staff'
 
@@ -150,11 +155,11 @@ class BiometricSyncService:
         if not device_user_id:
             return None
 
-        member = Member.objects.filter(device_user_id=device_user_id).select_related('user').first()
+        member = Member.objects.filter(device_user_id=device_user_id).first()
         if member:
             return member
 
-        staff = Staff.objects.filter(device_user_id=device_user_id).select_related('user').first()
+        staff = Staff.objects.filter(device_user_id=device_user_id).first()
         if staff:
             return staff
 
@@ -165,12 +170,15 @@ class BiometricSyncService:
             raise BiometricSyncError('Missing target or device_user_id for assignment.')
 
         existing_target = self.resolve_software_target(device_user_id)
-        if existing_target and existing_target.pk != target.pk:
+        if existing_target and (
+            existing_target.__class__ != target.__class__ or existing_target.pk != target.pk
+        ):
             raise BiometricSyncError(
                 f'Device user ID {device_user_id} is already assigned to another account.'
             )
 
-        if getattr(target, 'device_user_id', None) and getattr(target, 'device_user_id') != device_user_id:
+        current_target_id = getattr(target, 'device_user_id', None)
+        if current_target_id and current_target_id != device_user_id:
             raise BiometricSyncError(
                 'Software master mapping conflict: target already has a different device_user_id.'
             )
@@ -185,7 +193,10 @@ class BiometricSyncService:
 
         current_id = getattr(target, 'device_user_id', None)
         if not current_id:
-            if self.resolve_software_target(reported_device_user_id):
+            existing_target = self.resolve_software_target(reported_device_user_id)
+            if existing_target and (
+                existing_target.__class__ != target.__class__ or existing_target.pk != target.pk
+            ):
                 return {
                     'ok': False,
                     'reason': 'Reported device_user_id is already assigned to another software account.',
@@ -210,11 +221,62 @@ class BiometricSyncService:
             'device_user_id': current_id,
         }
 
+    def _update_status_after_push(self, target: Any, result: Dict[str, Any], device_user_id: str):
+        if isinstance(target, Member):
+            status_obj, _ = MemberBiometricDeviceStatus.objects.get_or_create(
+                member=target,
+                device=self.device,
+                defaults={'device_user_id': device_user_id},
+            )
+        elif isinstance(target, Staff):
+            status_obj, _ = StaffBiometricDeviceStatus.objects.get_or_create(
+                staff=target,
+                device=self.device,
+                defaults={'device_user_id': device_user_id},
+            )
+        else:
+            return
+
+        if not status_obj.device_user_id:
+            status_obj.device_user_id = device_user_id
+
+        status_obj.last_status_checked_at = timezone.now()
+
+        if result.get('ok'):
+            status_obj.sync_status = status_obj.SyncStatus.SUCCESS
+            status_obj.is_enabled_on_device = True
+            status_obj.last_synced_at = timezone.now()
+            status_obj.last_error = ''
+        else:
+            status_obj.sync_status = status_obj.SyncStatus.FAILED
+            status_obj.is_enabled_on_device = False
+            status_obj.last_error = result.get('message', 'Enrollment failed.')
+
+        if 'face_added' in result:
+            status_obj.face_added = bool(result['face_added'])
+        if 'fingerprint_added' in result:
+            status_obj.fingerprint_added = bool(result['fingerprint_added'])
+        if 'password_added' in result:
+            status_obj.password_added = bool(result['password_added'])
+
+        update_fields = [
+            'device_user_id',
+            'last_status_checked_at',
+            'sync_status',
+            'is_enabled_on_device',
+            'last_synced_at',
+            'last_error',
+            'face_added',
+            'fingerprint_added',
+            'password_added',
+        ]
+        status_obj.save(update_fields=update_fields)
+
     def push_enrollment(self, target: Any, device_user_id: str) -> Dict[str, Any]:
         if isinstance(self.adapter, UnknownDeviceAdapter):
             result = self.adapter.push_enrollment(target, device_user_id)
             self.create_sync_log(
-                action=BiometricSyncLog.ACTION_ENROLLMENT,
+                action=BiometricSyncLog.Action.ENROLLMENT,
                 payload={'target': str(target), 'device_user_id': device_user_id},
                 response=result,
                 target=target,
@@ -222,12 +284,13 @@ class BiometricSyncService:
                 success=result.get('ok', False),
                 notes='Adapter does not support enrollment yet.',
             )
+            self._update_status_after_push(target, result, device_user_id)
             return result
 
         assignment = self.reconcile_device_user(target, device_user_id)
         if not assignment['ok']:
             self.create_sync_log(
-                action=BiometricSyncLog.ACTION_CONFLICT,
+                action=BiometricSyncLog.Action.CONFLICT,
                 payload={'target': str(target), 'reported_device_user_id': device_user_id},
                 response=assignment,
                 target=target,
@@ -235,28 +298,34 @@ class BiometricSyncService:
                 success=False,
                 notes='Conflict while reconciling device user mapping.',
             )
+            self._update_status_after_push(
+                target,
+                {'ok': False, 'message': assignment.get('reason', 'Conflict while reconciling mapping.')},
+                device_user_id,
+            )
             return assignment
 
         result = self.adapter.push_enrollment(target, device_user_id)
         self.create_sync_log(
-            action=BiometricSyncLog.ACTION_ENROLLMENT,
+            action=BiometricSyncLog.Action.ENROLLMENT,
             payload={'target': str(target), 'device_user_id': device_user_id},
             response=result,
             target=target,
             device_user_id=device_user_id,
             success=result.get('ok', False),
         )
+        self._update_status_after_push(target, result, device_user_id)
         return result
 
     def probe(self) -> Dict[str, Any]:
         status = self.adapter.probe_status()
-        self.device.last_sync_at = timezone.localtime()
+        self.device.last_sync_at = timezone.now()
         self.device.save(update_fields=['last_sync_at'])
         self.create_sync_log(
-            action=BiometricSyncLog.ACTION_DEVICE_HEARTBEAT,
+            action=BiometricSyncLog.Action.DEVICE_HEARTBEAT,
             payload={'status': status},
             response=status,
-            device_user_id=''
+            device_user_id='',
         )
         return status
 
@@ -265,7 +334,7 @@ class BiometricSyncService:
         if isinstance(self.adapter, UnknownDeviceAdapter):
             message = 'Unknown device adapter. No active sync available.'
             self.create_sync_log(
-                action=BiometricSyncLog.ACTION_DEVICE_SYNC,
+                action=BiometricSyncLog.Action.DEVICE_SYNC,
                 payload={'reason': message},
                 response={'ok': False, 'message': message},
                 success=False,
@@ -274,7 +343,7 @@ class BiometricSyncService:
 
         enrolled = self.adapter.fetch_enrolled_users()
         self.create_sync_log(
-            action=BiometricSyncLog.ACTION_DEVICE_SYNC,
+            action=BiometricSyncLog.Action.DEVICE_SYNC,
             payload={'fetch_enrolled_users': enrolled},
             response=enrolled,
             success=enrolled.get('ok', False),
