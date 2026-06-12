@@ -5,7 +5,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Prefetch, Q, Sum
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
+from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView
@@ -14,7 +14,6 @@ from accounts.models import UserAccount
 from accounts.permissions import RoleRequiredMixin
 from attendance.biometric import BiometricSyncService
 from attendance.models import (
-    AttendanceLog,
     BiometricDevice,
     BiometricDeviceCommand,
     BiometricSyncLog,
@@ -109,7 +108,7 @@ class MemberCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
     model = Member
     form_class = MemberForm
     template_name = 'members/member_form.html'
-    success_url = reverse_lazy('members:list')
+    success_url = '/members/'
     success_message = 'Member profile created successfully.'
 
     def form_valid(self, form):
@@ -118,14 +117,15 @@ class MemberCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
         self.object.updated_by = self.request.user
         self.object.save()
         form.save_m2m()
-        return redirect(self.get_success_url())
+        messages.success(self.request, self.success_message)
+        return redirect(self.success_url)
 
 
 class MemberUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     model = Member
     form_class = MemberForm
     template_name = 'members/member_form.html'
-    success_url = reverse_lazy('members:list')
+    success_url = '/members/'
     success_message = 'Member profile updated successfully.'
 
     def form_valid(self, form):
@@ -133,7 +133,8 @@ class MemberUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         self.object.updated_by = self.request.user
         self.object.save()
         form.save_m2m()
-        return redirect(self.get_success_url())
+        messages.success(self.request, self.success_message)
+        return redirect(self.success_url)
 
 
 class MemberDeleteRequestCreateView(RoleRequiredMixin, SuccessMessageMixin, CreateView):
@@ -141,7 +142,7 @@ class MemberDeleteRequestCreateView(RoleRequiredMixin, SuccessMessageMixin, Crea
     model = MemberDeleteRequest
     form_class = MemberDeleteRequestForm
     template_name = 'members/member_delete_request_form.html'
-    success_url = reverse_lazy('members:list')
+    success_url = '/members/'
     success_message = 'Delete request submitted successfully. Owner will review it.'
 
     def get_context_data(self, **kwargs):
@@ -152,6 +153,7 @@ class MemberDeleteRequestCreateView(RoleRequiredMixin, SuccessMessageMixin, Crea
     def form_valid(self, form):
         form.instance.member = get_object_or_404(Member, pk=self.kwargs['pk'])
         form.instance.requested_by = self.request.user
+        messages.success(self.request, self.success_message)
         return super().form_valid(form)
 
 
@@ -177,7 +179,7 @@ class MemberDeleteRequestReviewView(RoleRequiredMixin, SuccessMessageMixin, Upda
     model = MemberDeleteRequest
     form_class = MemberDeleteRequestReviewForm
     template_name = 'members/member_delete_request_review.html'
-    success_url = reverse_lazy('members:delete_request_list')
+    success_url = '/members/delete-requests/'
     success_message = 'Delete request updated successfully.'
 
     def form_valid(self, form):
@@ -190,6 +192,7 @@ class MemberDeleteRequestReviewView(RoleRequiredMixin, SuccessMessageMixin, Upda
             member.status = Member.STATUS_INACTIVE
             member.save(update_fields=['status'])
 
+        messages.success(self.request, self.success_message)
         return response
 
 
@@ -263,8 +266,7 @@ class MemberDetailView(LoginRequiredMixin, DetailView):
         context['device_user_links'] = (
             DeviceUserLink.objects
             .filter(member=member)
-            .select_related('device')
-            .order_by('device__device_name', 'device__serial_number', 'device_user_id')
+            .order_by('device_user_id')
         )
         return context
 
@@ -288,7 +290,7 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
             device=device,
             defaults={
                 'device_user_id': device_user_id,
-                'sync_status': MemberBiometricDeviceStatus.SYNC_PENDING,
+                'sync_status': MemberBiometricDeviceStatus.SyncStatus.PENDING,
             },
         )
 
@@ -308,15 +310,14 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
             member=member,
             command=command,
             payload=payload or '',
-            status=BiometricDeviceCommand.STATUS_PENDING,
+            status=BiometricDeviceCommand.Status.PENDING,
         )
 
-    def update_device_link(self, member, device, device_user_id):
+    def update_device_link(self, member, device_user_id):
         if not device_user_id:
             return None
 
         link, created = DeviceUserLink.objects.get_or_create(
-            device=device,
             device_user_id=device_user_id,
             defaults={
                 'member': member,
@@ -344,23 +345,20 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
         device_user_id = self.get_target_device_user_id(member)
 
         if not device_user_id:
-            status_obj.sync_status = MemberBiometricDeviceStatus.SYNC_FAILED
+            status_obj.sync_status = MemberBiometricDeviceStatus.SyncStatus.FAILED
             status_obj.last_error = 'Member has no device_user_id or member_id for biometric sync.'
-            status_obj.last_synced_at = timezone.now()
             status_obj.last_status_checked_at = timezone.now()
             status_obj.notes = 'Sync failed before dispatch because no device user identifier was available.'
             status_obj.save(
                 update_fields=[
                     'sync_status',
                     'last_error',
-                    'last_synced_at',
                     'last_status_checked_at',
                     'notes',
                 ]
             )
             return False, status_obj, None
 
-        service = BiometricSyncService(device)
         payload = json.dumps(
             {
                 'member_id': member.member_id,
@@ -369,59 +367,46 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
             },
             default=str,
         )
+
         command = self.log_command(
             device=device,
             member=member,
-            command=BiometricDeviceCommand.COMMAND_ENROLL_USER,
+            command=BiometricDeviceCommand.CommandType.SYNC_USER,
             payload=payload,
         )
 
+        service = BiometricSyncService(device)
         result = service.push_enrollment(member, device_user_id)
 
         command.status = (
-            BiometricDeviceCommand.STATUS_COMPLETED
+            BiometricDeviceCommand.Status.SUCCESS
             if result.get('ok')
-            else BiometricDeviceCommand.STATUS_FAILED
+            else BiometricDeviceCommand.Status.FAILED
         )
         command.response_payload = json.dumps(result, default=str)
         command.processed_at = timezone.now()
-        command.error_message = '' if result.get('ok') else result.get('error', 'Enrollment failed.')
+        command.error_message = '' if result.get('ok') else result.get('message', 'Enrollment failed.')
         command.save(update_fields=['status', 'response_payload', 'processed_at', 'error_message'])
 
-        status_obj.device_user_id = device_user_id
-        status_obj.last_synced_at = timezone.now()
-        status_obj.last_status_checked_at = timezone.now()
-        status_obj.is_enabled_on_device = bool(result.get('ok'))
-        status_obj.last_error = '' if result.get('ok') else result.get('error', 'Enrollment failed.')
+        status_obj.refresh_from_db()
 
         if result.get('ok'):
-            status_obj.sync_status = MemberBiometricDeviceStatus.SYNC_SUCCESS
             status_obj.notes = 'Member synced successfully to biometric device.'
-            self.update_device_link(member, device, device_user_id)
+            self.update_device_link(member, device_user_id)
         else:
-            status_obj.sync_status = MemberBiometricDeviceStatus.SYNC_FAILED
             status_obj.notes = 'Biometric sync attempt failed.'
 
-        status_obj.save(
-            update_fields=[
-                'device_user_id',
-                'sync_status',
-                'last_synced_at',
-                'last_status_checked_at',
-                'is_enabled_on_device',
-                'last_error',
-                'notes',
-            ]
-        )
+        status_obj.save(update_fields=['notes'])
 
         BiometricSyncLog.objects.create(
             device=device,
             member=member,
-            action=BiometricSyncLog.ACTION_ENROLL,
+            person_type=BiometricSyncLog._meta.get_field('person_type').choices[0][0] if False else 'member',
+            action=BiometricSyncLog.Action.COMMAND,
             device_user_id=device_user_id,
             success=bool(result.get('ok')),
             payload=payload,
-            response=command.response_payload,
+            response=json.dumps(result, default=str),
             notes=status_obj.notes,
         )
 
@@ -429,51 +414,26 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
 
     def perform_status_check(self, member, device):
         status_obj = self.get_or_create_status(member, device)
-        device_user_id = self.get_target_device_user_id(member)
         service = BiometricSyncService(device)
+        result = service.probe()
 
-        result = service.check_user(member, device_user_id=device_user_id)
-
-        status_obj.device_user_id = device_user_id
         status_obj.last_status_checked_at = timezone.now()
-        status_obj.last_error = '' if result.get('ok') else result.get('error', '')
-        status_obj.is_enabled_on_device = bool(result.get('exists', False))
-
-        if result.get('ok') and result.get('exists'):
-            status_obj.sync_status = MemberBiometricDeviceStatus.SYNC_SUCCESS
-            status_obj.notes = 'Device confirms member exists on biometric device.'
-            self.update_device_link(member, device, device_user_id)
-        elif result.get('ok'):
-            status_obj.sync_status = MemberBiometricDeviceStatus.SYNC_PENDING
-            status_obj.notes = 'Device responded, but member was not found on this biometric device.'
-        else:
-            status_obj.sync_status = MemberBiometricDeviceStatus.SYNC_FAILED
-            status_obj.notes = 'Device status check failed.'
-
-        status_obj.save(
-            update_fields=[
-                'device_user_id',
-                'last_status_checked_at',
-                'last_error',
-                'is_enabled_on_device',
-                'sync_status',
-                'notes',
-            ]
+        status_obj.last_error = '' if result.get('ok') else result.get('message', '')
+        status_obj.notes = (
+            'Device responded successfully.'
+            if result.get('ok')
+            else 'Device status check failed.'
         )
+        status_obj.save(update_fields=['last_status_checked_at', 'last_error', 'notes'])
 
         BiometricSyncLog.objects.create(
             device=device,
             member=member,
-            action=BiometricSyncLog.ACTION_STATUS_CHECK,
-            device_user_id=device_user_id,
+            person_type='member',
+            action=BiometricSyncLog.Action.DEVICE_HEARTBEAT,
+            device_user_id=status_obj.device_user_id or '',
             success=bool(result.get('ok')),
-            payload=json.dumps(
-                {
-                    'member_id': member.member_id,
-                    'device_user_id': device_user_id,
-                },
-                default=str,
-            ),
+            payload=json.dumps({'member_id': member.member_id}, default=str),
             response=json.dumps(result, default=str),
             notes=status_obj.notes,
         )
@@ -484,7 +444,7 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
         next_url = self.request.POST.get('next') or self.request.GET.get('next')
         if next_url:
             return next_url
-        return reverse_lazy('members:detail', kwargs={'pk': member.pk})
+        return reverse('members:detail', kwargs={'pk': member.pk})
 
 
 class MemberSendToDeviceView(MemberBiometricSyncBaseView):
@@ -552,16 +512,10 @@ class MemberCheckDeviceStatusView(MemberBiometricSyncBaseView):
         ok, status_obj, result = self.perform_status_check(member, device)
 
         if ok:
-            if status_obj.is_enabled_on_device:
-                messages.success(
-                    request,
-                    f'{member.full_name} is available on {device.device_name or device.serial_number}.',
-                )
-            else:
-                messages.info(
-                    request,
-                    f'{member.full_name} is not currently present on {device.device_name or device.serial_number}.',
-                )
+            messages.success(
+                request,
+                f'Device {device.device_name or device.serial_number} responded successfully.',
+            )
         else:
             messages.error(
                 request,
