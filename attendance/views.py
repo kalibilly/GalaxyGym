@@ -10,10 +10,9 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
+from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
 from accounts.models import UserAccount
 from members.models import Member
@@ -316,12 +315,25 @@ def get_or_create_device(device_serial, raw_body='', request=None):
     if not device_serial:
         return None
 
-    device, created = BiometricDevice.objects.get_or_create(
+    device, _ = BiometricDevice.objects.get_or_create(
         serial_number=device_serial,
         defaults={'device_name': device_serial},
     )
     remote_ip = get_client_ip(request) if request is not None else None
-    device.touch_heartbeat(raw_body or '', remote_ip=remote_ip)
+    if hasattr(device, 'touch_heartbeat'):
+        device.touch_heartbeat(raw_body or '', remote_ip=remote_ip)
+    else:
+        device.last_seen_at = timezone.now()
+        if hasattr(device, 'last_known_ip'):
+            device.last_known_ip = remote_ip or ''
+        if hasattr(device, 'last_payload'):
+            device.last_payload = raw_body or ''
+        update_fields = ['last_seen_at']
+        if hasattr(device, 'last_known_ip'):
+            update_fields.append('last_known_ip')
+        if hasattr(device, 'last_payload'):
+            update_fields.append('last_payload')
+        device.save(update_fields=update_fields)
     return device
 
 
@@ -452,8 +464,9 @@ def get_staff_device_status(staff, device):
 
 def deny_expired_member(target):
     if isinstance(target, Member):
-        target.status = Member.STATUS_INACTIVE
-        target.save(update_fields=['status'])
+        if hasattr(Member, 'STATUS_INACTIVE'):
+            target.status = Member.STATUS_INACTIVE
+            target.save(update_fields=['status'])
         if target.user:
             target.user.is_active = False
             target.user.save(update_fields=['is_active'])
@@ -575,9 +588,13 @@ def dispatch_biometric_request(request, payload, device_user_id, device_serial, 
             attendance, duplicate = record_access_attempt(target, decision, device, device_user_id, device_timestamp, False)
             if status_obj:
                 status_obj.last_status_checked_at = timezone.now()
-                status_obj.is_enabled_on_device = False
+                if hasattr(status_obj, 'is_enabled_on_device'):
+                    status_obj.is_enabled_on_device = False
                 status_obj.notes = f'Access denied: {decision.get("reason")}'
-                status_obj.save(update_fields=['last_status_checked_at', 'is_enabled_on_device', 'notes'])
+                update_fields = ['last_status_checked_at', 'notes']
+                if hasattr(status_obj, 'is_enabled_on_device'):
+                    update_fields.append('is_enabled_on_device')
+                status_obj.save(update_fields=update_fields)
             log_sync_event(
                 action=BiometricSyncLog.Action.ACCESS_ATTEMPT,
                 device=device,
@@ -593,9 +610,13 @@ def dispatch_biometric_request(request, payload, device_user_id, device_serial, 
         attendance, duplicate = record_access_attempt(target, decision, device, device_user_id, device_timestamp, True)
         if status_obj:
             status_obj.last_status_checked_at = timezone.now()
-            status_obj.is_enabled_on_device = True
+            if hasattr(status_obj, 'is_enabled_on_device'):
+                status_obj.is_enabled_on_device = True
             status_obj.notes = 'Attendance accepted by software rules.'
-            status_obj.save(update_fields=['last_status_checked_at', 'is_enabled_on_device', 'notes'])
+            update_fields = ['last_status_checked_at', 'notes']
+            if hasattr(status_obj, 'is_enabled_on_device'):
+                update_fields.append('is_enabled_on_device')
+            status_obj.save(update_fields=update_fields)
         log_sync_event(
             action=BiometricSyncLog.Action.ACCESS_ATTEMPT,
             device=device,
@@ -617,9 +638,13 @@ def dispatch_biometric_request(request, payload, device_user_id, device_serial, 
             attendance, duplicate = record_access_attempt(target, decision, device, device_user_id, device_timestamp, False)
             if status_obj:
                 status_obj.last_status_checked_at = timezone.now()
-                status_obj.is_enabled_on_device = False
+                if hasattr(status_obj, 'is_enabled_on_device'):
+                    status_obj.is_enabled_on_device = False
                 status_obj.notes = f'Access denied: {decision.get("reason")}'
-                status_obj.save(update_fields=['last_status_checked_at', 'is_enabled_on_device', 'notes'])
+                update_fields = ['last_status_checked_at', 'notes']
+                if hasattr(status_obj, 'is_enabled_on_device'):
+                    update_fields.append('is_enabled_on_device')
+                status_obj.save(update_fields=update_fields)
             log_sync_event(
                 action=BiometricSyncLog.Action.ACCESS_ATTEMPT,
                 device=device,
@@ -635,9 +660,13 @@ def dispatch_biometric_request(request, payload, device_user_id, device_serial, 
         attendance, duplicate = record_access_attempt(target, decision, device, device_user_id, device_timestamp, True)
         if status_obj:
             status_obj.last_status_checked_at = timezone.now()
-            status_obj.is_enabled_on_device = True
+            if hasattr(status_obj, 'is_enabled_on_device'):
+                status_obj.is_enabled_on_device = True
             status_obj.notes = 'Attendance accepted by software rules.'
-            status_obj.save(update_fields=['last_status_checked_at', 'is_enabled_on_device', 'notes'])
+            update_fields = ['last_status_checked_at', 'notes']
+            if hasattr(status_obj, 'is_enabled_on_device'):
+                update_fields.append('is_enabled_on_device')
+            status_obj.save(update_fields=update_fields)
         log_sync_event(
             action=BiometricSyncLog.Action.ACCESS_ATTEMPT,
             device=device,
@@ -686,7 +715,7 @@ def queue_member_device_command(member, device, command_type, notes=''):
         notes=notes,
     )
     status_obj = get_member_device_status(member, device)
-    if command_type in {
+    if status_obj and command_type in {
         BiometricDeviceCommand.CommandType.SYNC_USER,
         BiometricDeviceCommand.CommandType.SYNC_FACE,
         BiometricDeviceCommand.CommandType.SYNC_FINGERPRINT,
@@ -694,7 +723,8 @@ def queue_member_device_command(member, device, command_type, notes=''):
         BiometricDeviceCommand.CommandType.REFRESH_USER,
         BiometricDeviceCommand.CommandType.ENABLE_USER,
     }:
-        status_obj.mark_sync_sent()
+        if hasattr(status_obj, 'mark_sync_sent'):
+            status_obj.mark_sync_sent()
     return command
 
 
@@ -707,7 +737,7 @@ def queue_staff_device_command(staff, device, command_type, notes=''):
         notes=notes,
     )
     status_obj = get_staff_device_status(staff, device)
-    if command_type in {
+    if status_obj and command_type in {
         BiometricDeviceCommand.CommandType.SYNC_USER,
         BiometricDeviceCommand.CommandType.SYNC_FACE,
         BiometricDeviceCommand.CommandType.SYNC_FINGERPRINT,
@@ -715,7 +745,8 @@ def queue_staff_device_command(staff, device, command_type, notes=''):
         BiometricDeviceCommand.CommandType.REFRESH_USER,
         BiometricDeviceCommand.CommandType.ENABLE_USER,
     }:
-        status_obj.mark_sync_sent()
+        if hasattr(status_obj, 'mark_sync_sent'):
+            status_obj.mark_sync_sent()
     return command
 
 
@@ -739,12 +770,12 @@ def device_sync_status(request):
             'device': {
                 'serial_number': device.serial_number,
                 'device_name': device.device_name,
-                'device_type': device.device_type,
-                'firmware_version': device.firmware_version,
-                'is_active': device.is_active,
-                'last_seen_at': device.last_seen_at.isoformat() if device.last_seen_at else None,
-                'last_sync_at': device.last_sync_at.isoformat() if device.last_sync_at else None,
-                'last_known_ip': device.last_known_ip,
+                'device_type': getattr(device, 'device_type', ''),
+                'firmware_version': getattr(device, 'firmware_version', ''),
+                'is_active': getattr(device, 'is_active', True),
+                'last_seen_at': device.last_seen_at.isoformat() if getattr(device, 'last_seen_at', None) else None,
+                'last_sync_at': device.last_sync_at.isoformat() if getattr(device, 'last_sync_at', None) else None,
+                'last_known_ip': getattr(device, 'last_known_ip', ''),
             },
             'sync_status': status,
         }
@@ -787,21 +818,31 @@ def device_enrollment(request):
         if not target:
             return JsonResponse({'ok': False, 'error': 'Unknown member_id.'}, status=404)
         ensure_device_user_link(target, device_user_id)
-        status_obj = get_member_device_status(target, device)
+        get_member_device_status(target, device)
+        queue_member_device_command(target, device, BiometricDeviceCommand.CommandType.SYNC_USER, notes='ADMS enrollment requested from API')
+        if payload.get('sync_face', True):
+            queue_member_device_command(target, device, BiometricDeviceCommand.CommandType.SYNC_FACE, notes='ADMS face sync requested')
+        if payload.get('sync_fingerprint', True):
+            queue_member_device_command(target, device, BiometricDeviceCommand.CommandType.SYNC_FINGERPRINT, notes='ADMS fingerprint sync requested')
+        if payload.get('sync_password'):
+            queue_member_device_command(target, device, BiometricDeviceCommand.CommandType.SYNC_PASSWORD, notes='ADMS password sync requested')
+        if payload.get('enable_user', True):
+            queue_member_device_command(target, device, BiometricDeviceCommand.CommandType.ENABLE_USER, notes='ADMS enable user requested')
     else:
         target = Staff.objects.filter(staff_id=staff_id).select_related('user').first()
         if not target:
             return JsonResponse({'ok': False, 'error': 'Unknown staff_id.'}, status=404)
         ensure_device_user_link(target, device_user_id)
-        status_obj = get_staff_device_status(target, device)
-
-    sync_service = BiometricSyncService(device)
-    sync_result = sync_service.push_enrollment(target, device_user_id)
-
-    if sync_result.get('ok'):
-        status_obj.mark_sync_success()
-    else:
-        status_obj.mark_sync_failed(sync_result.get('error') or 'Enrollment push failed.')
+        get_staff_device_status(target, device)
+        queue_staff_device_command(target, device, BiometricDeviceCommand.CommandType.SYNC_USER, notes='ADMS enrollment requested from API')
+        if payload.get('sync_face', True):
+            queue_staff_device_command(target, device, BiometricDeviceCommand.CommandType.SYNC_FACE, notes='ADMS face sync requested')
+        if payload.get('sync_fingerprint', True):
+            queue_staff_device_command(target, device, BiometricDeviceCommand.CommandType.SYNC_FINGERPRINT, notes='ADMS fingerprint sync requested')
+        if payload.get('sync_password'):
+            queue_staff_device_command(target, device, BiometricDeviceCommand.CommandType.SYNC_PASSWORD, notes='ADMS password sync requested')
+        if payload.get('enable_user', True):
+            queue_staff_device_command(target, device, BiometricDeviceCommand.CommandType.ENABLE_USER, notes='ADMS enable user requested')
 
     log_sync_event(
         action=BiometricSyncLog.Action.ENROLLMENT,
@@ -809,66 +850,22 @@ def device_enrollment(request):
         member=target if isinstance(target, Member) else None,
         staff=target if isinstance(target, Staff) else None,
         device_user_id=device_user_id,
-        success=bool(sync_result.get('ok')),
+        success=True,
         payload=json.dumps(payload, default=str),
-        response=json.dumps(sync_result, default=str),
-        notes='Enrollment API request processed.',
+        response='QUEUED',
+        notes='Enrollment commands queued for ADMS delivery.',
     )
 
     return JsonResponse(
         {
-            'ok': sync_result.get('ok', False),
-            'result': sync_result,
+            'ok': True,
+            'queued': True,
             'device_serial': device.serial_number,
             'device_user_id': device_user_id,
             'member_id': getattr(target, 'member_id', None),
             'staff_id': getattr(target, 'staff_id', None),
-        },
-        status=200 if sync_result.get('ok', False) else 409,
+        }
     )
-
-
-@csrf_exempt
-@require_http_methods(['GET', 'POST'])
-def biometric_get_request(request):
-    payload = normalize_request_payload(request)
-    log_biometric_request(request, payload)
-
-    primary_payload = get_primary_payload(
-        payload['post_data'],
-        payload['xml_fields'],
-        payload['plain_text_rows'],
-        payload['json_payload'],
-    )
-    device_serial = extract_device_serial(
-        payload['query_data'],
-        payload['post_data'],
-        payload['xml_fields'],
-        primary_payload,
-        payload['json_payload'] or {},
-    )
-    device_user_id = extract_device_user_id(primary_payload, payload['query_data'])
-    device = update_device_record(device_serial, payload['raw_body'], request=request)
-
-    create_raw_event(
-        device=device,
-        event_type=BiometricRawEvent.EventType.COMMAND_POLL,
-        request=request,
-        raw_body=payload['raw_body'],
-        device_user_id=device_user_id or '',
-        parsed_ok=True,
-        notes='Device poll endpoint hit.',
-    )
-    log_sync_event(
-        action=BiometricSyncLog.Action.DEVICE_HEARTBEAT,
-        device=device,
-        device_user_id=device_user_id or '',
-        success=True,
-        payload=json.dumps(payload, default=str),
-        response='OK',
-        notes='Device poll/heartbeat received.',
-    )
-    return HttpResponse('OK', content_type='text/plain')
 
 
 @csrf_exempt
@@ -992,101 +989,203 @@ def access_sync(request):
     return JsonResponse({'ok': False, 'error': 'Provide member_id or staff_id.'}, status=400)
 
 
-@csrf_exempt
-@require_http_methods(['GET', 'POST'])
-def iclock_cdata(request):
-    payload = normalize_request_payload(request)
-    log_biometric_request(request, payload)
-
-    plain_text_rows = payload['plain_text_rows']
-    primary_payload = get_primary_payload(
-        payload['post_data'],
-        payload['xml_fields'],
-        plain_text_rows,
-        payload['json_payload'],
+def _extract_attlog_timestamp(row, fallback_payload):
+    raw_value = (
+        row.get('datetime')
+        or row.get('time')
+        or row.get('stamp')
+        or fallback_payload.get('time')
+        or fallback_payload.get('stamp')
+        or fallback_payload.get('datetime')
     )
-    device_serial = extract_device_serial(
-        payload['query_data'],
-        payload['post_data'],
-        payload['xml_fields'],
-        primary_payload,
-        payload['json_payload'] or {},
+    return parse_device_timestamp(raw_value) or timezone.now()
+
+
+def _extract_attlog_verify_mode(row):
+    verify_value = (
+        row.get('verify')
+        or row.get('verifymode')
+        or row.get('verify_mode')
+        or ''
     )
-    device = update_device_record(device_serial, payload['raw_body'], request=request)
-
-    if plain_text_rows:
-        for row in plain_text_rows:
-            row_device_user_id = extract_device_user_id(row, payload['query_data'])
-            row_timestamp = parse_device_timestamp(
-                row.get('datetime') or row.get('stamp') or row.get('time') or row.get('date')
-            )
-            dispatch_biometric_request(
-                request,
-                payload,
-                row_device_user_id,
-                device_serial,
-                row_timestamp,
-            )
-        return HttpResponse('OK', content_type='text/plain')
-
-    device_user_id = extract_device_user_id(primary_payload, payload['query_data'])
-    device_timestamp = parse_device_timestamp(
-        primary_payload.get('datetime')
-        or primary_payload.get('stamp')
-        or primary_payload.get('time')
-        or primary_payload.get('date')
-    )
-    return dispatch_biometric_request(request, payload, device_user_id, device_serial, device_timestamp)
+    return str(verify_value).strip()
 
 
-@csrf_exempt
-@require_http_methods(['GET'])
-def iclock_getrequest(request):
-    query_data = {k.lower(): v for k, v in request.GET.items()}
-    device_serial = extract_device_serial(query_data)
-    device = update_device_record(device_serial, '', request=request)
+def _extract_attlog_status_code(row):
+    status_value = row.get('status') or row.get('inoutstate') or row.get('state') or ''
+    return str(status_value).strip()
 
-    create_raw_event(
-        device=device,
-        event_type=BiometricRawEvent.EventType.COMMAND_POLL,
-        request=request,
-        raw_body='',
-        parsed_ok=True,
-        notes='Device requested pending commands.',
-    )
 
-    if not device:
-        return HttpResponse('OK', content_type='text/plain')
-
-    command = (
-        BiometricDeviceCommand.objects
-        .filter(device=device, status=BiometricDeviceCommand.Status.PENDING)
-        .order_by('queued_at', 'id')
-        .first()
-    )
+def _mark_command_acknowledged(command, device, payload, raw_body, success=True, notes=''):
     if not command:
-        return HttpResponse('OK', content_type='text/plain')
+        return
 
-    command_text = build_device_command_text(command)
-    command.mark_sent(response_payload=command_text)
+    if hasattr(BiometricDeviceCommand, 'Status'):
+        command.status = (
+            BiometricDeviceCommand.Status.SUCCESS
+            if success else BiometricDeviceCommand.Status.FAILED
+        )
+    if hasattr(command, 'executed_at'):
+        command.executed_at = timezone.now()
+    if hasattr(command, 'last_response'):
+        command.last_response = raw_body[:5000] if raw_body else ''
+    if hasattr(command, 'notes'):
+        command.notes = notes or getattr(command, 'notes', '')
+
+    update_fields = []
+    if hasattr(command, 'status'):
+        update_fields.append('status')
+    if hasattr(command, 'executed_at'):
+        update_fields.append('executed_at')
+    if hasattr(command, 'last_response'):
+        update_fields.append('last_response')
+    if hasattr(command, 'notes'):
+        update_fields.append('notes')
+    if update_fields:
+        command.save(update_fields=update_fields)
+
+    if command.member:
+        status_obj = get_member_device_status(command.member, device)
+        if status_obj:
+            if success and hasattr(status_obj, 'mark_sync_success'):
+                status_obj.mark_sync_success()
+            elif not success and hasattr(status_obj, 'mark_sync_failed'):
+                status_obj.mark_sync_failed(notes or 'Device reported command failure.')
+    elif command.staff:
+        status_obj = get_staff_device_status(command.staff, device)
+        if status_obj:
+            if success and hasattr(status_obj, 'mark_sync_success'):
+                status_obj.mark_sync_success()
+            elif not success and hasattr(status_obj, 'mark_sync_failed'):
+                status_obj.mark_sync_failed(notes or 'Device reported command failure.')
 
     log_sync_event(
-        action=BiometricSyncLog.Action.COMMAND,
+        action=BiometricSyncLog.Action.ENROLLMENT,
         device=device,
         member=command.member,
         staff=command.staff,
         device_user_id=command.device_user_id,
-        success=True,
-        payload=command.payload,
-        response=command_text,
-        notes=f'Command {command.get_command_display()} sent to device.',
+        success=success,
+        payload=json.dumps(payload, default=str),
+        response=raw_body[:5000] if raw_body else '',
+        notes=notes or f'Command acknowledgment processed for #{command.pk}.',
     )
-    return HttpResponse(command_text, content_type='text/plain')
+
+
+def _handle_command_ack_rows(device, payload):
+    raw_body = payload.get('raw_body', '')
+    rows = payload.get('plain_text_rows', [])
+    if not rows:
+        return False
+
+    handled = False
+    for row in rows:
+        cmd_id = row.get('id') or row.get('cmdid') or row.get('commandid')
+        if not cmd_id or not str(cmd_id).isdigit():
+            continue
+
+        command = (
+            BiometricDeviceCommand.objects
+            .filter(pk=int(cmd_id), device=device)
+            .select_related('member', 'staff')
+            .first()
+        )
+        if not command:
+            continue
+
+        row_text = row.get('_raw', '')
+        normalized = row_text.upper()
+        success = not any(token in normalized for token in ['ERROR', 'FAIL'])
+        notes = f'Device acknowledgment row: {row_text}' if row_text else 'Device command acknowledgment received.'
+        _mark_command_acknowledged(command, device, payload, raw_body, success=success, notes=notes)
+        handled = True
+
+    return handled
+
+
+def _handle_operlog_rows(device, payload, request):
+    raw_body = payload.get('raw_body', '')
+    rows = payload.get('plain_text_rows', [])
+    if not rows:
+        return
+
+    for row in rows:
+        device_user_id = extract_device_user_id(row, payload.get('query_data', {}), payload.get('post_data', {}))
+        create_raw_event(
+            device=device,
+            event_type=BiometricRawEvent.EventType.OPERATION,
+            request=request,
+            raw_body=row.get('_raw', raw_body),
+            device_user_id=device_user_id or '',
+            parsed_ok=bool(device_user_id),
+            notes='OPERLOG row received from device.',
+        )
+
+
+def _handle_attlog_rows(device, payload, request):
+    raw_body = payload.get('raw_body', '')
+    rows = payload.get('plain_text_rows', [])
+
+    for row in rows:
+        split_cols = row.get('_split_cols', [])
+        device_user_id = extract_device_user_id(row, payload.get('query_data', {}), payload.get('post_data', {}))
+
+        if not device_user_id and split_cols:
+            device_user_id = str(split_cols[0]).strip()
+
+        device_timestamp = _extract_attlog_timestamp(row, payload.get('query_data', {}))
+        verify_mode = _extract_attlog_verify_mode(row)
+        status_code = _extract_attlog_status_code(row)
+
+        create_raw_event(
+            device=device,
+            event_type=BiometricRawEvent.EventType.ATTENDANCE,
+            request=request,
+            raw_body=row.get('_raw', raw_body),
+            device_user_id=device_user_id or '',
+            parsed_ok=bool(device_user_id),
+            notes=f'ATTLOG verify={verify_mode or "-"} status={status_code or "-"}',
+        )
+
+        if not device_user_id:
+            log_sync_event(
+                action=BiometricSyncLog.Action.ACCESS_ATTEMPT,
+                device=device,
+                success=False,
+                payload=json.dumps(row, default=str),
+                response='ERR_USER_ID_MISSING',
+                notes='Could not extract device user id from ATTLOG row.',
+            )
+            continue
+
+        dispatch_biometric_request(
+            request=request,
+            payload={
+                **payload,
+                'raw_body': row.get('_raw', raw_body),
+                'attlog_row': row,
+            },
+            device_user_id=device_user_id,
+            device_serial=device.serial_number if device else '',
+            device_timestamp=device_timestamp,
+        )
 
 
 @csrf_exempt
 @require_http_methods(['GET', 'POST'])
-def iclock_devicecmd(request):
+def biometric_get_request(request):
+    return iclock_getrequest(request)
+
+
+@csrf_exempt
+@require_http_methods(['GET', 'POST'])
+def biometric_endpoint(request):
+    return iclock_cdata(request)
+
+
+@csrf_exempt
+@require_http_methods(['GET', 'POST'])
+def iclock_getrequest(request):
     payload = normalize_request_payload(request)
     log_biometric_request(request, payload)
 
@@ -1096,6 +1195,7 @@ def iclock_devicecmd(request):
         payload['plain_text_rows'],
         payload['json_payload'],
     )
+
     device_serial = extract_device_serial(
         payload['query_data'],
         payload['post_data'],
@@ -1103,104 +1203,183 @@ def iclock_devicecmd(request):
         primary_payload,
         payload['json_payload'] or {},
     )
-    device = update_device_record(device_serial, payload['raw_body'], request=request)
+
+    if not device_serial:
+        logger.warning('ADMS getrequest received without device serial.')
+        return HttpResponse('OK', content_type='text/plain')
+
+    device = update_device_record(device_serial, payload.get('raw_body', ''), request=request)
 
     create_raw_event(
         device=device,
-        event_type=BiometricRawEvent.EventType.COMMAND_ACK,
+        event_type=BiometricRawEvent.EventType.COMMAND_POLL,
         request=request,
-        raw_body=payload['raw_body'],
+        raw_body=payload.get('raw_body', ''),
+        device_user_id='',
         parsed_ok=True,
-        notes='Device command acknowledgement received.',
+        notes='ADMS getrequest poll received.',
     )
 
-    raw_body = payload['raw_body'] or ''
-    ack_match = None
-    for token in raw_body.replace('\n', ' ').split():
-        if token.isdigit():
-            ack_match = token
-            break
+    log_sync_event(
+        action=BiometricSyncLog.Action.DEVICE_HEARTBEAT,
+        device=device,
+        success=True,
+        payload=json.dumps(payload, default=str),
+        response='POLL',
+        notes='ADMS getrequest poll received.',
+    )
 
-    command = None
-    if ack_match:
-        command = BiometricDeviceCommand.objects.filter(pk=ack_match).first()
+    pending_qs = BiometricDeviceCommand.objects.filter(device=device)
+    if hasattr(BiometricDeviceCommand, 'Status'):
+        pending_qs = pending_qs.filter(status=BiometricDeviceCommand.Status.PENDING)
 
-    if command:
-        if 'ok' in raw_body.lower() or 'success' in raw_body.lower():
-            command.mark_success(response_payload=raw_body[:5000])
-            if command.member:
-                status_obj = get_member_device_status(command.member, command.device)
-                status_obj.mark_sync_success()
-            elif command.staff:
-                status_obj = get_staff_device_status(command.staff, command.device)
-                status_obj.mark_sync_success()
-        else:
-            command.mark_acknowledged(response_payload=raw_body[:5000])
+    pending_command = pending_qs.order_by('created_at').first()
 
-        log_sync_event(
-            action=BiometricSyncLog.Action.COMMAND,
+    if not pending_command:
+        return HttpResponse('OK', content_type='text/plain')
+
+    command_text = build_device_command_text(pending_command)
+
+    update_fields = []
+    if hasattr(pending_command, 'status') and hasattr(BiometricDeviceCommand, 'Status'):
+        pending_command.status = BiometricDeviceCommand.Status.SENT
+        update_fields.append('status')
+    if hasattr(pending_command, 'sent_at'):
+        pending_command.sent_at = timezone.now()
+        update_fields.append('sent_at')
+    if hasattr(pending_command, 'last_response'):
+        pending_command.last_response = command_text
+        update_fields.append('last_response')
+    if update_fields:
+        pending_command.save(update_fields=update_fields)
+
+    if pending_command.member:
+        status_obj = get_member_device_status(pending_command.member, device)
+        if status_obj and pending_command.command in {
+            BiometricDeviceCommand.CommandType.SYNC_USER,
+            BiometricDeviceCommand.CommandType.SYNC_FACE,
+            BiometricDeviceCommand.CommandType.SYNC_FINGERPRINT,
+            BiometricDeviceCommand.CommandType.SYNC_PASSWORD,
+            BiometricDeviceCommand.CommandType.REFRESH_USER,
+            BiometricDeviceCommand.CommandType.ENABLE_USER,
+        }:
+            if hasattr(status_obj, 'mark_sync_sent'):
+                status_obj.mark_sync_sent()
+    elif pending_command.staff:
+        status_obj = get_staff_device_status(pending_command.staff, device)
+        if status_obj and pending_command.command in {
+            BiometricDeviceCommand.CommandType.SYNC_USER,
+            BiometricDeviceCommand.CommandType.SYNC_FACE,
+            BiometricDeviceCommand.CommandType.SYNC_FINGERPRINT,
+            BiometricDeviceCommand.CommandType.SYNC_PASSWORD,
+            BiometricDeviceCommand.CommandType.REFRESH_USER,
+            BiometricDeviceCommand.CommandType.ENABLE_USER,
+        }:
+            if hasattr(status_obj, 'mark_sync_sent'):
+                status_obj.mark_sync_sent()
+
+    log_sync_event(
+        action=BiometricSyncLog.Action.DEVICE_HEARTBEAT,
+        device=device,
+        member=getattr(pending_command, 'member', None),
+        staff=getattr(pending_command, 'staff', None),
+        device_user_id=getattr(pending_command, 'device_user_id', ''),
+        success=True,
+        payload=json.dumps(payload, default=str),
+        response=command_text,
+        notes=f'Queued command dispatched: {pending_command.command}',
+    )
+
+    return HttpResponse(command_text, content_type='text/plain')
+
+
+@csrf_exempt
+@require_http_methods(['GET', 'POST'])
+def iclock_cdata(request):
+    payload = normalize_request_payload(request)
+    log_biometric_request(request, payload)
+
+    primary_payload = get_primary_payload(
+        payload['post_data'],
+        payload['xml_fields'],
+        payload['plain_text_rows'],
+        payload['json_payload'],
+    )
+
+    device_serial = extract_device_serial(
+        payload['query_data'],
+        payload['post_data'],
+        payload['xml_fields'],
+        primary_payload,
+        payload['json_payload'] or {},
+    )
+
+    if not device_serial:
+        logger.warning('ADMS cdata received without device serial.')
+        return HttpResponse('OK', content_type='text/plain')
+
+    device = update_device_record(device_serial, payload.get('raw_body', ''), request=request)
+
+    table_name = (
+        payload['query_data'].get('table')
+        or payload['post_data'].get('table')
+        or payload['xml_fields'].get('table')
+        or ''
+    ).upper()
+
+    options = (
+        payload['query_data'].get('options')
+        or payload['post_data'].get('options')
+        or payload['xml_fields'].get('options')
+        or ''
+    ).lower()
+
+    if request.method == 'GET':
+        create_raw_event(
             device=device,
-            member=command.member,
-            staff=command.staff,
-            device_user_id=command.device_user_id,
+            event_type=BiometricRawEvent.EventType.DEVICE_STATUS,
+            request=request,
+            raw_body=payload.get('raw_body', ''),
+            device_user_id='',
+            parsed_ok=True,
+            notes=f'ADMS cdata GET handshake received. table={table_name or "-"} options={options or "-"}',
+        )
+        log_sync_event(
+            action=BiometricSyncLog.Action.DEVICE_HEARTBEAT,
+            device=device,
             success=True,
-            payload=command.payload,
-            response=raw_body[:5000],
-            notes='Command acknowledgement received from device.',
+            payload=json.dumps(payload, default=str),
+            response='OK',
+            notes='ADMS cdata handshake received.',
         )
+        return HttpResponse('OK', content_type='text/plain')
 
+    if _handle_command_ack_rows(device, payload):
+        return HttpResponse('OK', content_type='text/plain')
+
+    if table_name == 'ATTLOG':
+        _handle_attlog_rows(device, payload, request)
+        return HttpResponse('OK', content_type='text/plain')
+
+    if table_name == 'OPERLOG':
+        _handle_operlog_rows(device, payload, request)
+        return HttpResponse('OK', content_type='text/plain')
+
+    create_raw_event(
+        device=device,
+        event_type=BiometricRawEvent.EventType.UNKNOWN,
+        request=request,
+        raw_body=payload.get('raw_body', ''),
+        device_user_id='',
+        parsed_ok=False,
+        notes=f'Unhandled ADMS cdata payload. table={table_name or "-"} options={options or "-"}',
+    )
+    log_sync_event(
+        action=BiometricSyncLog.Action.DEVICE_HEARTBEAT,
+        device=device,
+        success=True,
+        payload=json.dumps(payload, default=str),
+        response='OK',
+        notes=f'Unhandled cdata table received: {table_name or "unknown"}',
+    )
     return HttpResponse('OK', content_type='text/plain')
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-@method_decorator(require_http_methods(['GET', 'POST']), name='dispatch')
-class BiometricEndpointView(View):
-    def post(self, request, *args, **kwargs):
-        return self.handle_request(request)
-
-    def get(self, request, *args, **kwargs):
-        return self.handle_request(request)
-
-    def handle_request(self, request):
-        payload = normalize_request_payload(request)
-        log_biometric_request(request, payload)
-
-        plain_text_rows = payload['plain_text_rows']
-        if plain_text_rows:
-            primary_payload = plain_text_rows[0]
-        else:
-            primary_payload = get_primary_payload(
-                payload['post_data'],
-                payload['xml_fields'],
-                plain_text_rows,
-                payload['json_payload'],
-            )
-
-        device_serial = extract_device_serial(
-            payload['query_data'],
-            payload['post_data'],
-            payload['xml_fields'],
-            primary_payload,
-            payload['json_payload'] or {},
-        )
-
-        if plain_text_rows:
-            for row in plain_text_rows:
-                row_device_user_id = extract_device_user_id(row, payload['query_data'])
-                row_ts = parse_device_timestamp(
-                    row.get('datetime') or row.get('stamp') or row.get('time') or row.get('date')
-                )
-                dispatch_biometric_request(request, payload, row_device_user_id, device_serial, row_ts)
-            return HttpResponse('OK', content_type='text/plain')
-
-        device_user_id = extract_device_user_id(primary_payload, payload['query_data'])
-        device_timestamp = parse_device_timestamp(
-            primary_payload.get('datetime')
-            or primary_payload.get('stamp')
-            or primary_payload.get('time')
-            or primary_payload.get('date')
-        )
-        return dispatch_biometric_request(request, payload, device_user_id, device_serial, device_timestamp)
-
-
-biometric_endpoint = BiometricEndpointView.as_view()
