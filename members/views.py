@@ -5,7 +5,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Prefetch, Q, Sum
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import View
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView
@@ -108,7 +108,7 @@ class MemberCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
     model = Member
     form_class = MemberForm
     template_name = 'members/member_form.html'
-    success_url = '/members/'
+    success_url = reverse_lazy('members:list')
     success_message = 'Member profile created successfully.'
 
     def form_valid(self, form):
@@ -125,7 +125,7 @@ class MemberUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     model = Member
     form_class = MemberForm
     template_name = 'members/member_form.html'
-    success_url = '/members/'
+    success_url = reverse_lazy('members:list')
     success_message = 'Member profile updated successfully.'
 
     def form_valid(self, form):
@@ -142,7 +142,7 @@ class MemberDeleteRequestCreateView(RoleRequiredMixin, SuccessMessageMixin, Crea
     model = MemberDeleteRequest
     form_class = MemberDeleteRequestForm
     template_name = 'members/member_delete_request_form.html'
-    success_url = '/members/'
+    success_url = reverse_lazy('members:list')
     success_message = 'Delete request submitted successfully. Owner will review it.'
 
     def get_context_data(self, **kwargs):
@@ -179,7 +179,7 @@ class MemberDeleteRequestReviewView(RoleRequiredMixin, SuccessMessageMixin, Upda
     model = MemberDeleteRequest
     form_class = MemberDeleteRequestReviewForm
     template_name = 'members/member_delete_request_review.html'
-    success_url = '/members/delete-requests/'
+    success_url = reverse_lazy('members:delete_request_list')
     success_message = 'Delete request updated successfully.'
 
     def form_valid(self, form):
@@ -401,7 +401,7 @@ class MemberBiometricSyncBaseView(RoleRequiredMixin, View):
         BiometricSyncLog.objects.create(
             device=device,
             member=member,
-            person_type=BiometricSyncLog._meta.get_field('person_type').choices[0][0] if False else 'member',
+            person_type='member',
             action=BiometricSyncLog.Action.COMMAND,
             device_user_id=device_user_id,
             success=bool(result.get('ok')),
