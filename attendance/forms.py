@@ -15,7 +15,9 @@ class AttendanceLogForm(forms.ModelForm):
             'date',
             'source',
             'verification_mode',
-            'device_id',
+            'device',
+            'device_identifier',
+            'device_user_id',
             'status',
             'remarks',
         ]
@@ -32,9 +34,16 @@ class AttendanceLogForm(forms.ModelForm):
         staff = cleaned_data.get('staff')
         check_in_time = cleaned_data.get('check_in_time')
         check_out_time = cleaned_data.get('check_out_time')
+        device = cleaned_data.get('device')
+        device_identifier = cleaned_data.get('device_identifier')
 
         if bool(member) == bool(staff):
             raise ValidationError('Select exactly one of member or staff for attendance.')
+
         if check_in_time and check_out_time and check_out_time < check_in_time:
             raise ValidationError('Check-out cannot be earlier than check-in.')
+
+        if device and not device_identifier:
+            cleaned_data['device_identifier'] = device.serial_number
+
         return cleaned_data
