@@ -8,9 +8,7 @@ app_name = 'attendance'
 
 urlpatterns = [
     path('', views.AttendanceListView.as_view(), name='attendance_list'),
-    path('<int:pk>/', views.AttendanceDetailView.as_view(), name='attendance_detail'),
     path('create/', views.AttendanceCreateView.as_view(), name='attendance_create'),
-    path('<int:pk>/update/', views.AttendanceUpdateView.as_view(), name='attendance_update'),
 
     path('member/<int:member_pk>/', views.MemberAttendanceHistoryView.as_view(), name='member_history'),
     path('staff/<int:staff_pk>/', views.StaffAttendanceHistoryView.as_view(), name='staff_history'),
@@ -21,6 +19,10 @@ urlpatterns = [
     path('device/access-sync/', views.access_sync, name='access_sync'),
 
     # ADMS / PUSH endpoints for eSSL MB20 and eSSL AiFace Orcus
-    path('iclock/getrequest/', views.iclock_getrequest, name='iclock_getrequest'),
-    path('iclock/cdata/', views.iclock_cdata, name='iclock_cdata'),
+    path('iclock/getrequest/', views.biometric_device_getrequest, name='iclock_getrequest'),
+    path('iclock/cdata/', views.biometric_device_cdata, name='iclock_cdata'),
+    path('iclock/', views.biometric_device_listener, name='iclock_listener'),
+
+    path('<int:pk>/update/', views.AttendanceUpdateView.as_view(), name='attendance_update'),
+    path('<int:pk>/', views.AttendanceDetailView.as_view(), name='attendance_detail'),
 ]
