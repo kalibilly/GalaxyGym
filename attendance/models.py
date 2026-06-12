@@ -55,7 +55,7 @@ class AttendanceLog(TimeStampedModel):
         on_delete=models.SET_NULL,
         related_name='attendance_logs',
     )
-    device_id = models.CharField(max_length=64, blank=True)
+    device_identifier = models.CharField(max_length=64, blank=True)
     device_user_id = models.CharField(max_length=64, blank=True, null=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PRESENT)
     remarks = models.TextField(blank=True)
@@ -99,8 +99,8 @@ class AttendanceLog(TimeStampedModel):
         elif self.staff:
             self.person_type = self.PersonType.STAFF
 
-        if self.device and not self.device_id:
-            self.device_id = self.device.serial_number
+        if self.device and not self.device_identifier:
+            self.device_identifier = self.device.serial_number
 
         if not self.date and self.check_in_time:
             local_dt = timezone.localtime(self.check_in_time) if timezone.is_aware(self.check_in_time) else self.check_in_time
