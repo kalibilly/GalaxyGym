@@ -3,6 +3,7 @@ import logging
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
@@ -378,7 +379,10 @@ def get_or_create_device(device_serial, raw_body="", request=None):
     )
 
     if hasattr(device, "touch_heartbeat"):
-        device.touch_heartbeat(raw_body or "", remote_ip=get_client_ip(request) if request else None)
+        device.touch_heartbeat(
+            raw_body or "",
+            remote_ip=get_client_ip(request) if request else None,
+        )
 
     return device
 
@@ -887,7 +891,10 @@ def biometric_device_cdata(request):
 
         if stamp_value.isdigit():
             command = (
-                BiometricDeviceCommand.objects.filter(pk=int(stamp_value), device=device).first()
+                BiometricDeviceCommand.objects.filter(
+                    pk=int(stamp_value),
+                    device=device,
+                ).first()
             )
 
         if command:
@@ -918,11 +925,20 @@ def biometric_device_cdata(request):
                     if status:
                         if hasattr(status, "mark_sync_success"):
                             status.mark_sync_success()
-                        if command.command == BiometricDeviceCommand.CommandType.SYNC_FACE and hasattr(status, "set_face_added"):
+                        if (
+                            command.command == BiometricDeviceCommand.CommandType.SYNC_FACE
+                            and hasattr(status, "set_face_added")
+                        ):
                             status.set_face_added(True)
-                        elif command.command == BiometricDeviceCommand.CommandType.SYNC_FINGERPRINT and hasattr(status, "set_fingerprint_added"):
+                        elif (
+                            command.command == BiometricDeviceCommand.CommandType.SYNC_FINGERPRINT
+                            and hasattr(status, "set_fingerprint_added")
+                        ):
                             status.set_fingerprint_added(True)
-                        elif command.command == BiometricDeviceCommand.CommandType.SYNC_PASSWORD and hasattr(status, "set_password_added"):
+                        elif (
+                            command.command == BiometricDeviceCommand.CommandType.SYNC_PASSWORD
+                            and hasattr(status, "set_password_added")
+                        ):
                             status.set_password_added(True)
 
                 elif command.staff_id:
@@ -977,9 +993,13 @@ def biometric_device_cdata(request):
 
 
 @require_http_methods(["GET"])
-@csrf_exempt
+@login_required
 def device_sync_status(request):
-    serial_number = request.GET.get("device_serial") or request.GET.get("sn") or request.GET.get("serial")
+    serial_number = (
+        request.GET.get("device_serial")
+        or request.GET.get("sn")
+        or request.GET.get("serial")
+    )
     if not serial_number:
         return JsonResponse(
             {"ok": False, "error": "device_serial query parameter is required."},
@@ -1004,8 +1024,16 @@ def device_sync_status(request):
                 "device_type": getattr(device, "device_type", ""),
                 "firmware_version": getattr(device, "firmware_version", ""),
                 "is_active": getattr(device, "is_active", True),
-                "last_seen_at": device.last_seen_at.isoformat() if getattr(device, "last_seen_at", None) else None,
-                "last_sync_at": device.last_sync_at.isoformat() if getattr(device, "last_sync_at", None) else None,
+                "last_seen_at": (
+                    device.last_seen_at.isoformat()
+                    if getattr(device, "last_seen_at", None)
+                    else None
+                ),
+                "last_sync_at": (
+                    device.last_sync_at.isoformat()
+                    if getattr(device, "last_sync_at", None)
+                    else None
+                ),
                 "last_known_ip": getattr(device, "last_known_ip", ""),
                 "pending_commands": pending_commands,
             },
