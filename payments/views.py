@@ -144,5 +144,9 @@ class MemberPaymentHistoryView(LoginRequiredMixin, DetailView):
         member = self.object
         context['invoices'] = member.invoices.order_by('-invoice_date')[:10]
         context['payments'] = member.payments.order_by('-payment_date')[:10]
-        context['open_balance'] = member.invoices.filter(status__in=[Invoice.STATUS_UNPAID, Invoice.STATUS_PARTIAL]).aggregate(total=Sum('balance_amount'))['total'] or 0
+        context['open_balance'] = (
+            member.invoices
+            .filter(status__in=[Invoice.STATUS_UNPAID, Invoice.STATUS_PARTIAL])
+            .aggregate(total=Sum('balance_amount'))['total'] or 0
+        )
         return context
