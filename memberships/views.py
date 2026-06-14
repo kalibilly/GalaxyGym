@@ -1,8 +1,12 @@
+from datetime import timedelta
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
+from django.shortcuts import redirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DetailView, ListView, UpdateView
+from django.utils import timezone
+from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 
 from .forms import MembershipForm, MembershipPlanForm
 from .models import Membership, MembershipPlan
@@ -59,12 +63,13 @@ class MembershipListView(LoginRequiredMixin, ListView):
     paginate_by = 12
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related('member', 'plan').order_by('-start_date')
+        queryset = super().get_queryset().select_related('member', 'plan', 'renewed_from').order_by('-start_date')
         query = self.request.GET.get('q')
         status = self.request.GET.get('status')
         if query:
             queryset = queryset.filter(
-                Q(member__member_id__icontains=query)
+                Q(serial_number__icontains=query)
+                | Q(member__member_id__icontains=query)
                 | Q(member__full_name__icontains=query)
                 | Q(plan__name__icontains=query)
             )
@@ -85,12 +90,50 @@ class MembershipCreateView(LoginRequiredMixin, CreateView):
     template_name = 'memberships/membership_form.html'
     success_url = reverse_lazy('memberships:list')
 
+    def get_initial(self):
+        initial = super().get_initial()
+        member_id = self.request.GET.get('member')
+        plan_id = self.request.GET.get('plan')
+        renewed_from = self.request.GET.get('renewed_from')
+
+        if member_id:
+            initial['member'] = member_id
+        if plan_id:
+            initial['plan'] = plan_id
+        if renewed_from:
+            source_membership = Membership.objects.select_related('plan').filter(pk=renewed_from).first()
+            if source_membership:
+                next_start_date = max(timezone.localdate(), source_membership.end_date + timedelta(days=1))
+                initial['member'] = source_membership.member_id
+                initial['plan'] = source_membership.plan_id
+                initial['start_date'] = next_start_date
+                initial['end_date'] = next_start_date + timedelta(days=source_membership.plan.duration_days)
+                initial['membership_amount'] = source_membership.membership_amount
+                initial['discount_amount'] = source_membership.discount_amount
+                initial['payment_status'] = Membership.PAYMENT_STATUS_UNPAID
+                initial['renewed_from'] = source_membership.pk
+        return initial
+
+    def form_valid(self, form):
+        renewed_from = self.request.GET.get('renewed_from')
+        if renewed_from:
+            source_membership = Membership.objects.filter(pk=renewed_from).first()
+            if source_membership:
+                form.instance.renewed_from = source_membership
+        form.instance.serial_number = form.instance.serial_number or Membership.get_next_serial_number()
+        return super().form_valid(form)
+
 
 class MembershipUpdateView(LoginRequiredMixin, UpdateView):
     model = Membership
     form_class = MembershipForm
     template_name = 'memberships/membership_form.html'
     success_url = reverse_lazy('memberships:list')
+
+
+class MembershipRenewView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        return redirect(f"{reverse_lazy('memberships:create')}?renewed_from={pk}")
 
 
 class MembershipDetailView(LoginRequiredMixin, DetailView):
@@ -100,5 +143,5 @@ class MembershipDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['latest_invoice'] = self.object.invoices.first()
+        context['can_renew'] = self.object.needs_renewal_action
         return context
