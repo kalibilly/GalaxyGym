@@ -1,3 +1,4 @@
+import re
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -108,6 +109,16 @@ class MembershipPlan(TimeStampedModel, ActiveStatusModel):
 
 
 class Membership(TimeStampedModel):
+    PAYMENT_STATUS_UNPAID = 'unpaid'
+    PAYMENT_STATUS_PARTIAL = 'partial'
+    PAYMENT_STATUS_PAID = 'paid'
+
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_STATUS_UNPAID, 'Unpaid'),
+        (PAYMENT_STATUS_PARTIAL, 'Partial'),
+        (PAYMENT_STATUS_PAID, 'Paid'),
+    ]
+
     STATUS_ACTIVE = 'active'
     STATUS_EXPIRING_SOON = 'expiring_soon'
     STATUS_EXPIRED = 'expired'
@@ -122,6 +133,7 @@ class Membership(TimeStampedModel):
         (STATUS_CANCELLED, 'Cancelled'),
     ]
 
+    serial_number = models.CharField(max_length=32, unique=True, null=True, blank=True)
     member = models.ForeignKey(
         'members.Member',
         on_delete=models.CASCADE,
@@ -137,6 +149,11 @@ class Membership(TimeStampedModel):
     membership_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     final_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default=PAYMENT_STATUS_UNPAID,
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
     renewed_from = models.ForeignKey(
         'self',
@@ -153,11 +170,32 @@ class Membership(TimeStampedModel):
         verbose_name_plural = 'Memberships'
 
     def __str__(self):
-        return f'{self.member} — {self.plan} ({self.start_date} to {self.end_date})'
+        serial = self.serial_number or 'Membership'
+        return f'{serial} — {self.member} — {self.plan}'
+
+    @classmethod
+    def get_next_serial_number(cls):
+        prefix = 'MBR-'
+        latest = cls.objects.exclude(serial_number__isnull=True).exclude(serial_number='').order_by('-id').first()
+        if not latest or not latest.serial_number:
+            return f'{prefix}0001'
+
+        match = re.search(r'(\d+)$', latest.serial_number)
+        if not match:
+            return f'{prefix}0001'
+
+        next_number = int(match.group(1)) + 1
+        return f'{prefix}{next_number:04d}'
 
     def clean(self):
         if self.end_date < self.start_date:
             raise ValidationError('End date must be on or after start date.')
+        if self.membership_amount < 0:
+            raise ValidationError({'membership_amount': 'Membership amount cannot be negative.'})
+        if self.discount_amount < 0:
+            raise ValidationError({'discount_amount': 'Discount cannot be negative.'})
+        if self.discount_amount > self.membership_amount:
+            raise ValidationError({'discount_amount': 'Discount cannot be greater than membership amount.'})
 
     def derive_status(self):
         if self.status in {self.STATUS_FROZEN, self.STATUS_CANCELLED}:
@@ -173,6 +211,8 @@ class Membership(TimeStampedModel):
         return self.STATUS_ACTIVE
 
     def save(self, *args, **kwargs):
+        if not self.serial_number:
+            self.serial_number = self.get_next_serial_number()
         self.final_amount = self.membership_amount - self.discount_amount
         self.status = self.derive_status()
         super().save(*args, **kwargs)
@@ -192,3 +232,17 @@ class Membership(TimeStampedModel):
     @property
     def cardio_label(self):
         return self.plan.cardio_label
+
+    @property
+    def needs_renewal_action(self):
+        return self.status in {self.STATUS_EXPIRING_SOON, self.STATUS_EXPIRED}
+
+    @property
+    def renewal_badge_class(self):
+        return {
+            self.STATUS_ACTIVE: 'success',
+            self.STATUS_EXPIRING_SOON: 'warning',
+            self.STATUS_EXPIRED: 'danger',
+            self.STATUS_FROZEN: 'secondary',
+            self.STATUS_CANCELLED: 'dark',
+        }.get(self.status, 'secondary')
