@@ -3,13 +3,13 @@
 {% block title %}Memberships - Galaxy Gym{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-4">
+<div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
     <div>
         <h1 class="h4 mb-0">Memberships</h1>
-        <p class="text-white-50">Manage membership records, payment status, and renewals.</p>
+        <p class="text-white-50 mb-0">Manage membership records, payment status, and renewals.</p>
     </div>
-    <div>
-        <a href="{% url 'memberships:plan_list' %}" class="btn btn-outline-secondary me-2">Plans</a>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'memberships:plan_list' %}" class="btn btn-outline-secondary">Plans</a>
         <a href="{% url 'memberships:create' %}" class="btn btn-primary">Add Membership</a>
     </div>
 </div>
