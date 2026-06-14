@@ -50,24 +50,24 @@
                     <h5 class="mb-0 text-white">Admin Functions</h5>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted mb-3">Manage gym operations and users:</p>
+                    <p class="text-white-50 mb-3">Manage gym operations and memberships:</p>
                     <div class="row g-2">
-                        <div class="col-md-6">
+                        <div class="col-12 col-md-6">
                             <a href="{% url 'members:create' %}" class="btn btn-outline-light w-100">Add Member</a>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12 col-md-6">
                             <a href="{% url 'members:list' %}" class="btn btn-outline-light w-100">View Members</a>
                         </div>
-                        <div class="col-md-6">
-                            <a href="{% url 'payments:invoice_create' %}" class="btn btn-outline-light w-100">Create Invoice</a>
+                        <div class="col-12 col-md-6">
+                            <a href="{% url 'memberships:list' %}" class="btn btn-outline-light w-100">Memberships</a>
                         </div>
-                        <div class="col-md-6">
-                            <a href="{% url 'payments:payment_create' %}" class="btn btn-outline-light w-100">Record Payment</a>
+                        <div class="col-12 col-md-6">
+                            <a href="{% url 'memberships:create' %}" class="btn btn-outline-light w-100">Add Membership</a>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12 col-md-6">
                             <a href="{% url 'admin:index' %}" class="btn btn-primary w-100" target="_blank">Django Admin</a>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12 col-md-6">
                             <a href="{% url 'profile' %}" class="btn btn-outline-light w-100">Update Profile</a>
                         </div>
                     </div>
@@ -84,13 +84,13 @@
                 </div>
                 <div class="card-body">
                     <ul class="list-group list-group-flush bg-secondary">
-                        <li class="list-group-item bg-secondary text-muted">
-                            <strong>Manual Register:</strong> Add new members, create memberships, and record payments through the admin interface.
+                        <li class="list-group-item bg-secondary text-white-50">
+                            <strong>Manual Register:</strong> Add new members and manage memberships through the admin interface.
                         </li>
-                        <li class="list-group-item bg-secondary text-muted">
+                        <li class="list-group-item bg-secondary text-white-50">
                             <strong>Manage Users:</strong> Create, edit, and deactivate receptionist and staff accounts in Django Admin.
                         </li>
-                        <li class="list-group-item bg-secondary text-muted">
+                        <li class="list-group-item bg-secondary text-white-50">
                             <strong>Gym IDs:</strong> Issue and track gym member IDs manually in Django Admin.
                         </li>
                     </ul>
