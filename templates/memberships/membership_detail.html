@@ -7,8 +7,8 @@
     <div class="col-lg-8">
         <div class="card mb-3">
             <div class="card-body">
-                <h1 class="h4 mb-0">{{ membership.member.full_name }}</h1>
-                <p class="text-muted mb-0">{{ membership.plan.name }}</p>
+                <h1 class="h4 mb-0">{{ membership.serial_number }}</h1>
+                <p class="text-white-50 mb-0">{{ membership.member.full_name }} · {{ membership.plan.name }}</p>
             </div>
         </div>
 
@@ -16,48 +16,41 @@
             <div class="card-body">
                 <h5>Membership Summary</h5>
                 <dl class="row mb-0">
+                    <dt class="col-sm-4">Serial Number</dt>
+                    <dd class="col-sm-8">{{ membership.serial_number }}</dd>
                     <dt class="col-sm-4">Member</dt>
                     <dd class="col-sm-8">{{ membership.member.full_name }}</dd>
-                    <dt class="col-sm-4">Plan</dt>
+                    <dt class="col-sm-4">Membership Plan</dt>
                     <dd class="col-sm-8">{{ membership.plan.name }}</dd>
                     <dt class="col-sm-4">Start Date</dt>
                     <dd class="col-sm-8">{{ membership.start_date|date:'M d, Y' }}</dd>
                     <dt class="col-sm-4">End Date</dt>
                     <dd class="col-sm-8">{{ membership.end_date|date:'M d, Y' }}</dd>
-                    <dt class="col-sm-4">Amount</dt>
+                    <dt class="col-sm-4">Membership Amount</dt>
                     <dd class="col-sm-8">{{ membership.membership_amount }}</dd>
                     <dt class="col-sm-4">Discount</dt>
                     <dd class="col-sm-8">{{ membership.discount_amount }}</dd>
                     <dt class="col-sm-4">Final Amount</dt>
                     <dd class="col-sm-8">{{ membership.final_amount }}</dd>
-                    <dt class="col-sm-4">Status</dt>
-                    <dd class="col-sm-8">{{ membership.get_status_display }}</dd>
+                    <dt class="col-sm-4">Payment Status</dt>
+                    <dd class="col-sm-8">{{ membership.get_payment_status_display }}</dd>
+                    <dt class="col-sm-4">Renew Status</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge bg-{{ membership.renewal_badge_class }}">{{ membership.get_status_display }}</span>
+                    </dd>
                     <dt class="col-sm-4">Renewed From</dt>
-                    <dd class="col-sm-8">{{ membership.renewed_from if membership.renewed_from else '—' }}</dd>
+                    <dd class="col-sm-8">{% if membership.renewed_from %}{{ membership.renewed_from.serial_number }}{% else %}—{% endif %}</dd>
                     <dt class="col-sm-4">Remarks</dt>
                     <dd class="col-sm-8">{{ membership.remarks|linebreaksbr|default:'No remarks.' }}</dd>
                 </dl>
             </div>
         </div>
-        {% if latest_invoice %}
-            <div class="card mb-3">
-                <div class="card-body">
-                    <h5>Latest Invoice</h5>
-                    <dl class="row mb-0">
-                        <dt class="col-sm-4">Invoice</dt>
-                        <dd class="col-sm-8"><a href="{% url 'payments:invoice_detail' latest_invoice.pk %}">{{ latest_invoice.invoice_no }}</a></dd>
-                        <dt class="col-sm-4">Status</dt>
-                        <dd class="col-sm-8"><span class="badge bg-{{ latest_invoice.status_badge_class }}">{{ latest_invoice.get_status_display }}</span></dd>
-                        <dt class="col-sm-4">Total Due</dt>
-                        <dd class="col-sm-8">{{ latest_invoice.balance_amount }}</dd>
-                        <dt class="col-sm-4">Due Date</dt>
-                        <dd class="col-sm-8">{{ latest_invoice.due_date|date:'M d, Y' }}</dd>
-                    </dl>
-                </div>
-            </div>
-        {% endif %}
-
         <div class="d-flex justify-content-between">
+            {% if can_renew %}
+                <a href="{% url 'memberships:renew' membership.pk %}" class="btn btn-warning">Renew Membership</a>
+            {% else %}
+                <span></span>
+            {% endif %}
             <a href="{% url 'memberships:update' membership.pk %}" class="btn btn-primary">Edit Membership</a>
             <a href="{% url 'memberships:list' %}" class="btn btn-link">Back to memberships</a>
         </div>
