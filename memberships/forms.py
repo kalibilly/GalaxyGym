@@ -33,14 +33,40 @@ class MembershipForm(forms.ModelForm):
             'end_date',
             'membership_amount',
             'discount_amount',
-            'renewed_from',
+            'payment_status',
             'remarks',
         ]
         widgets = {
             'start_date': forms.DateInput(attrs={'type': 'date'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
             'remarks': forms.Textarea(attrs={'rows': 3}),
+            'membership_amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'discount_amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
         }
+        labels = {
+            'member': 'Member',
+            'plan': 'Membership Plan',
+            'start_date': 'Start Date',
+            'end_date': 'End Date',
+            'membership_amount': 'Membership Amount',
+            'discount_amount': 'Discount',
+            'payment_status': 'Payment Status',
+            'remarks': 'Remarks',
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        membership_amount = cleaned_data.get('membership_amount')
+        discount_amount = cleaned_data.get('discount_amount')
+
+        if membership_amount is not None and membership_amount < 0:
+            self.add_error('membership_amount', 'Membership amount cannot be negative.')
+        if discount_amount is not None and discount_amount < 0:
+            self.add_error('discount_amount', 'Discount cannot be negative.')
+        if membership_amount is not None and discount_amount is not None and discount_amount > membership_amount:
+            self.add_error('discount_amount', 'Discount cannot be greater than membership amount.')
+
+        return cleaned_data
 
 
 class MembershipPurchaseForm(forms.Form):
