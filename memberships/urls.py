@@ -12,6 +12,7 @@ urlpatterns = [
 
     path('', views.MembershipListView.as_view(), name='list'),
     path('create/', views.MembershipCreateView.as_view(), name='create'),
+    path('<int:pk>/renew/', views.MembershipRenewView.as_view(), name='renew'),
     path('<int:pk>/', views.MembershipDetailView.as_view(), name='detail'),
     path('<int:pk>/update/', views.MembershipUpdateView.as_view(), name='update'),
 ]
