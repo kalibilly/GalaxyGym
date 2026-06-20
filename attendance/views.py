@@ -216,6 +216,10 @@ def parse_xml(raw_body):
     return parsed
 
 
+def looks_like_datetime(value):
+    return parse_device_timestamp(value) is not None
+
+
 def parse_plain_text_rows(raw_body):
     rows = []
     if not raw_body:
@@ -228,17 +232,42 @@ def parse_plain_text_rows(raw_body):
 
         parsed = {"_raw": line}
 
-        if "=" in line:
+        if "=" in line and "\t" not in line:
             parts = line.replace("\t", " ").split()
             for part in parts:
                 if "=" in part:
                     key, value = part.split("=", 1)
                     parsed[key.lower()] = value.strip()
-        else:
-            cols = line.split()
-            parsed["_cols"] = cols
-            if cols:
-                parsed["id"] = cols[0]
+            rows.append(parsed)
+            continue
+
+        cols = [col.strip() for col in line.split("\t") if col.strip() != ""]
+        if not cols:
+            cols = [col.strip() for col in line.split() if col.strip()]
+
+        parsed["_cols"] = cols
+
+        if cols:
+            parsed["id"] = cols[0]
+            parsed["pin"] = cols[0]
+
+        if len(cols) >= 2 and looks_like_datetime(cols[1]):
+            parsed["checktime"] = cols[1]
+        elif len(cols) >= 3:
+            candidate = f"{cols[1]} {cols[2]}"
+            if looks_like_datetime(candidate):
+                parsed["checktime"] = candidate
+
+        if len(cols) >= 3:
+            parsed["status"] = cols[2]
+        if len(cols) >= 4:
+            parsed["verify"] = cols[3]
+        if len(cols) >= 5:
+            parsed["workcode"] = cols[4]
+        if len(cols) >= 6:
+            parsed["reserved_1"] = cols[5]
+        if len(cols) >= 7:
+            parsed["reserved_2"] = cols[6]
 
         rows.append(parsed)
 
@@ -249,12 +278,15 @@ def parse_device_timestamp(value):
     if not value:
         return None
 
+    value = str(value).strip()
     formats = (
         "%Y-%m-%d %H:%M:%S",
         "%Y/%m/%d %H:%M:%S",
         "%Y-%m-%dT%H:%M:%S",
         "%Y%m%d%H%M%S",
         "%d-%m-%Y %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y/%m/%d %H:%M",
     )
 
     for fmt in formats:
@@ -354,6 +386,18 @@ def extract_punch_timestamp(*sources):
                 dt = parse_device_timestamp(value)
                 if dt:
                     return dt
+
+        cols = source.get("_cols") if isinstance(source, dict) else None
+        if cols:
+            if len(cols) >= 2:
+                dt = parse_device_timestamp(cols[1])
+                if dt:
+                    return dt
+            if len(cols) >= 3:
+                dt = parse_device_timestamp(f"{cols[1]} {cols[2]}")
+                if dt:
+                    return dt
+
     return timezone.now()
 
 
@@ -367,6 +411,30 @@ def extract_event_type(*sources):
             if value:
                 return str(value).strip().lower()
     return ""
+
+
+def is_attendance_event(payload, event_name=""):
+    event_name = (event_name or "").strip().lower()
+    if event_name in {"attlog", "attendance", "checkin"}:
+        return True
+
+    table_name = (
+        payload["query_data"].get("table")
+        or payload["post_data"].get("table")
+        or payload["xml_fields"].get("table")
+        or ""
+    ).strip().lower()
+    if table_name == "attlog":
+        return True
+
+    for row in payload["plain_text_rows"]:
+        if row.get("checktime") and row.get("pin"):
+            return True
+        cols = row.get("_cols") or []
+        if len(cols) >= 2 and parse_device_timestamp(cols[1]):
+            return True
+
+    return False
 
 
 def get_or_create_device(device_serial, raw_body="", request=None):
@@ -529,7 +597,7 @@ def get_staff_device_status(staff, device):
 
 
 def is_member_allowed(member):
-    status_ok = getattr(member, "status", "") == "active"
+    status_ok = getattr(member, "status", "") == Member.STATUS_ACTIVE
     user_ok = True
     if hasattr(member, "user") and member.user:
         user_ok = bool(member.user.is_active)
@@ -636,35 +704,25 @@ def queue_staff_device_command(staff, device, command_type, notes=""):
     return command
 
 
-def handle_access_event(request, payload):
-    primary = get_primary_payload(payload)
-
-    device_serial = extract_device_serial(
-        primary,
-        payload["query_data"],
-        payload["post_data"],
-        payload["xml_fields"],
-    )
+def process_attendance_row(request, payload, device, row):
     device_user_id = extract_device_user_id(
-        primary,
+        row,
         payload["query_data"],
         payload["post_data"],
         payload["xml_fields"],
     )
     check_in_time = extract_punch_timestamp(
-        primary,
+        row,
         payload["query_data"],
         payload["post_data"],
         payload["xml_fields"],
     )
 
-    device = get_or_create_device(device_serial, payload["raw_body"], request)
-
     create_raw_event(
         device=device,
         event_type=BiometricRawEvent.EventType.ATTENDANCE,
         request=request,
-        raw_body=payload["raw_body"],
+        raw_body=row.get("_raw", payload["raw_body"]),
         device_user_id=device_user_id,
         parsed_ok=bool(device_user_id),
         notes="Attendance or access event received from device.",
@@ -677,11 +735,11 @@ def handle_access_event(request, payload):
             device=device,
             device_user_id=device_user_id,
             success=False,
-            payload=json.dumps(payload, default=str),
+            payload=json.dumps({"row": row, "request": payload}, default=str),
             response="ERR_USER_NOT_FOUND",
             notes="No member or staff matched the received device user ID.",
         )
-        return render_device_response(request, "ERR_USER_NOT_FOUND")
+        return False, "ERR_USER_NOT_FOUND"
 
     ensure_device_user_link(target, device_user_id)
 
@@ -727,12 +785,36 @@ def handle_access_event(request, payload):
         staff=target if isinstance(target, Staff) else None,
         device_user_id=device_user_id,
         success=allowed,
-        payload=json.dumps(payload, default=str),
+        payload=json.dumps({"row": row, "request": payload}, default=str),
         response="OK" if allowed else "DENY",
         notes="Duplicate attendance ignored." if duplicate else remarks,
     )
 
-    return render_device_response(request, "OK" if allowed else "DENY")
+    return allowed, "OK" if allowed else "DENY"
+
+
+def handle_access_event(request, payload):
+    primary = get_primary_payload(payload)
+
+    device_serial = extract_device_serial(
+        primary,
+        payload["query_data"],
+        payload["post_data"],
+        payload["xml_fields"],
+    )
+    device = get_or_create_device(device_serial, payload["raw_body"], request)
+
+    if payload["plain_text_rows"]:
+        any_success = False
+        last_response = "OK"
+        for row in payload["plain_text_rows"]:
+            allowed, response_text = process_attendance_row(request, payload, device, row)
+            any_success = any_success or allowed
+            last_response = response_text
+        return render_device_response(request, "OK" if any_success else last_response)
+
+    allowed, response_text = process_attendance_row(request, payload, device, primary)
+    return render_device_response(request, response_text if response_text else ("OK" if allowed else "DENY"))
 
 
 @require_http_methods(["GET", "POST"])
@@ -758,6 +840,9 @@ def biometric_device_listener(request):
     device = get_or_create_device(device_serial, payload["raw_body"], request)
 
     if request.method == "GET":
+        if "getrequest" in request.path.lower():
+            return biometric_device_getrequest(request)
+
         create_raw_event(
             device=device,
             event_type=BiometricRawEvent.EventType.HEARTBEAT,
@@ -776,10 +861,7 @@ def biometric_device_listener(request):
         )
         return render_device_response(request, "OK")
 
-    if "getrequest" in request.path.lower():
-        return biometric_device_getrequest(request)
-
-    if event_name in {"attlog", "attendance", "checkin"} or payload["plain_text_rows"]:
+    if is_attendance_event(payload, event_name):
         return handle_access_event(request, payload)
 
     create_raw_event(
@@ -867,6 +949,28 @@ def biometric_device_getrequest(request):
     return HttpResponse(command_text, content_type="text/plain")
 
 
+def detect_command_ack_row(rows, device):
+    if not rows:
+        return None, ""
+
+    first_row = rows[0]
+    stamp_value = str(first_row.get("id") or first_row.get("stamp") or "").strip()
+    if not stamp_value.isdigit():
+        return None, ""
+
+    command = (
+        BiometricDeviceCommand.objects.filter(
+            pk=int(stamp_value),
+            device=device,
+        ).first()
+    )
+    if not command:
+        return None, ""
+
+    raw_text = "\n".join(row.get("_raw", "") for row in rows).lower()
+    return command, raw_text
+
+
 @require_http_methods(["POST"])
 @csrf_exempt
 def biometric_device_cdata(request):
@@ -881,100 +985,61 @@ def biometric_device_cdata(request):
     )
     device = get_or_create_device(device_serial, payload["raw_body"], request)
 
+    if is_attendance_event(payload, extract_event_type(primary, payload["query_data"], payload["post_data"], payload["xml_fields"])):
+        return handle_access_event(request, payload)
+
     rows = payload["plain_text_rows"]
     raw_body = payload["raw_body"]
 
-    if rows:
-        first_row = rows[0]
-        stamp_value = first_row.get("id") or first_row.get("stamp") or ""
-        command = None
+    command, ack_text = detect_command_ack_row(rows, device)
 
-        if stamp_value.isdigit():
-            command = (
-                BiometricDeviceCommand.objects.filter(
-                    pk=int(stamp_value),
-                    device=device,
-                ).first()
-            )
+    if command:
+        create_raw_event(
+            device=device,
+            event_type=BiometricRawEvent.EventType.COMMAND_ACK,
+            request=request,
+            raw_body=raw_body,
+            device_user_id=command.device_user_id,
+            parsed_ok=True,
+            notes="Command acknowledgement received.",
+        )
 
-        if command:
-            create_raw_event(
-                device=device,
-                event_type=BiometricRawEvent.EventType.COMMAND_ACK,
-                request=request,
-                raw_body=raw_body,
-                device_user_id=command.device_user_id,
-                parsed_ok=True,
-                notes="Command acknowledgement received.",
-            )
+        success = "ok" in ack_text or "success" in ack_text
 
-            ack_text = raw_body.lower()
-            success = "ok" in ack_text or "success" in ack_text
-
-            if success:
-                if hasattr(command, "mark_success"):
-                    command.mark_success(response_payload=raw_body)
-                else:
-                    command.status = BiometricDeviceCommand.Status.SUCCESS
-                    if hasattr(command, "response_payload"):
-                        command.response_payload = raw_body
-                    command.save()
-
-                if command.member_id:
-                    status = get_member_device_status(command.member, command.device)
-                    if status:
-                        if hasattr(status, "mark_sync_success"):
-                            status.mark_sync_success()
-                        if (
-                            command.command == BiometricDeviceCommand.CommandType.SYNC_FACE
-                            and hasattr(status, "set_face_added")
-                        ):
-                            status.set_face_added(True)
-                        elif (
-                            command.command == BiometricDeviceCommand.CommandType.SYNC_FINGERPRINT
-                            and hasattr(status, "set_fingerprint_added")
-                        ):
-                            status.set_fingerprint_added(True)
-                        elif (
-                            command.command == BiometricDeviceCommand.CommandType.SYNC_PASSWORD
-                            and hasattr(status, "set_password_added")
-                        ):
-                            status.set_password_added(True)
-
-                elif command.staff_id:
-                    status = get_staff_device_status(command.staff, command.device)
-                    if status and hasattr(status, "mark_sync_success"):
-                        status.mark_sync_success()
-
-                log_sync_event(
-                    action=BiometricSyncLog.Action.COMMAND,
-                    device=device,
-                    member=command.member,
-                    staff=command.staff,
-                    device_user_id=command.device_user_id,
-                    success=True,
-                    payload=getattr(command, "payload", ""),
-                    response=raw_body,
-                    notes="Device command completed successfully.",
-                )
-                return render_device_response(request, "OK")
-
-            if hasattr(command, "mark_failed"):
-                command.mark_failed("Device reported failure.", response_payload=raw_body)
+        if success:
+            if hasattr(command, "mark_success"):
+                command.mark_success(response_payload=raw_body)
             else:
-                command.status = BiometricDeviceCommand.Status.FAILED
+                command.status = BiometricDeviceCommand.Status.SUCCESS
                 if hasattr(command, "response_payload"):
                     command.response_payload = raw_body
                 command.save()
 
             if command.member_id:
                 status = get_member_device_status(command.member, command.device)
-                if status and hasattr(status, "mark_sync_failed"):
-                    status.mark_sync_failed("Device reported failure.")
+                if status:
+                    if hasattr(status, "mark_sync_success"):
+                        status.mark_sync_success()
+                    if (
+                        command.command == BiometricDeviceCommand.CommandType.SYNC_FACE
+                        and hasattr(status, "set_face_added")
+                    ):
+                        status.set_face_added(True)
+                    elif (
+                        command.command == BiometricDeviceCommand.CommandType.SYNC_FINGERPRINT
+                        and hasattr(status, "set_fingerprint_added")
+                    ):
+                        status.set_fingerprint_added(True)
+                    elif (
+                        command.command == BiometricDeviceCommand.CommandType.SYNC_PASSWORD
+                        and hasattr(status, "set_password_added")
+                    ):
+                        status.set_password_added(True)
+
             elif command.staff_id:
                 status = get_staff_device_status(command.staff, command.device)
-                if status and hasattr(status, "mark_sync_failed"):
-                    status.mark_sync_failed("Device reported failure.")
+                if status and hasattr(status, "mark_sync_success"):
+                    status.mark_sync_success()
 
             log_sync_event(
                 action=BiometricSyncLog.Action.COMMAND,
@@ -982,12 +1047,42 @@ def biometric_device_cdata(request):
                 member=command.member,
                 staff=command.staff,
                 device_user_id=command.device_user_id,
-                success=False,
+                success=True,
                 payload=getattr(command, "payload", ""),
                 response=raw_body,
-                notes="Device command failed.",
+                notes="Device command completed successfully.",
             )
             return render_device_response(request, "OK")
+
+        if hasattr(command, "mark_failed"):
+            command.mark_failed("Device reported failure.", response_payload=raw_body)
+        else:
+            command.status = BiometricDeviceCommand.Status.FAILED
+            if hasattr(command, "response_payload"):
+                command.response_payload = raw_body
+            command.save()
+
+        if command.member_id:
+            status = get_member_device_status(command.member, command.device)
+            if status and hasattr(status, "mark_sync_failed"):
+                status.mark_sync_failed("Device reported failure.")
+        elif command.staff_id:
+            status = get_staff_device_status(command.staff, command.device)
+            if status and hasattr(status, "mark_sync_failed"):
+                status.mark_sync_failed("Device reported failure.")
+
+        log_sync_event(
+            action=BiometricSyncLog.Action.COMMAND,
+            device=device,
+            member=command.member,
+            staff=command.staff,
+            device_user_id=command.device_user_id,
+            success=False,
+            payload=getattr(command, "payload", ""),
+            response=raw_body,
+            notes="Device command failed.",
+        )
+        return render_device_response(request, "OK")
 
     return handle_access_event(request, payload)
 
