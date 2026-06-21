@@ -122,6 +122,38 @@ class AttendanceListView(AttendanceAccessMixin, ListView):
         return self.get_allowed_attendance_queryset(queryset)
 
 
+class MemberAttendanceHistoryView(AttendanceAccessMixin, ListView):
+    model = AttendanceLog
+    template_name = "attendance/attendance_list.html"
+    context_object_name = "attendance_list"
+    paginate_by = 20
+
+    def get_queryset(self):
+        member = get_object_or_404(Member, pk=self.kwargs["member_pk"])
+        queryset = (
+            AttendanceLog.objects.filter(member=member)
+            .select_related("member", "staff", "device")
+            .order_by("-date", "-check_in_time")
+        )
+        return self.get_allowed_attendance_queryset(queryset)
+
+
+class StaffAttendanceHistoryView(AttendanceAccessMixin, ListView):
+    model = AttendanceLog
+    template_name = "attendance/attendance_list.html"
+    context_object_name = "attendance_list"
+    paginate_by = 20
+
+    def get_queryset(self):
+        staff = get_object_or_404(Staff, pk=self.kwargs["staff_pk"])
+        queryset = (
+            AttendanceLog.objects.filter(staff=staff)
+            .select_related("member", "staff", "device")
+            .order_by("-date", "-check_in_time")
+        )
+        return self.get_allowed_attendance_queryset(queryset)
+
+
 class AttendanceDetailView(AttendanceAccessMixin, DetailView):
     model = AttendanceLog
     template_name = "attendance/attendance_detail.html"
@@ -136,7 +168,7 @@ class AttendanceCreateView(AttendanceAccessMixin, CreateView):
     model = AttendanceLog
     form_class = AttendanceLogForm
     template_name = "attendance/attendance_form.html"
-    success_url = reverse_lazy("attendance:list")
+    success_url = reverse_lazy("attendance:attendance_list")
 
     def dispatch(self, request, *args, **kwargs):
         if not self.is_owner():
@@ -148,7 +180,7 @@ class AttendanceUpdateView(AttendanceAccessMixin, UpdateView):
     model = AttendanceLog
     form_class = AttendanceLogForm
     template_name = "attendance/attendance_form.html"
-    success_url = reverse_lazy("attendance:list")
+    success_url = reverse_lazy("attendance:attendance_list")
 
     def dispatch(self, request, *args, **kwargs):
         if not self.is_owner():
@@ -316,9 +348,7 @@ def _parse_plain_text_rows(body_text):
     rows = []
     for raw_line in (body_text or "").replace("\r", "\n").split("\n"):
         line = raw_line.strip()
-        if not line:
-            continue
-        if "\t" not in line:
+        if not line or "\t" not in line:
             continue
 
         parts = [p.strip() for p in raw_line.strip().split("\t")]
@@ -388,8 +418,8 @@ def _extract_serial(request, xml_fields=None, json_payload=None):
         or request.POST.get("sn")
         or xml_fields.get("sn")
         or xml_fields.get("serialnumber")
-        or json_payload.get("sn")
-        or json_payload.get("serial_number")
+        or (json_payload or {}).get("sn")
+        or (json_payload or {}).get("serial_number")
         or ""
     ).strip()
 
@@ -401,7 +431,8 @@ def _get_or_create_device(serial_number, payload="", remote_ip=None):
         serial_number=serial_number,
         defaults={"device_name": serial_number},
     )
-    device.touch_heartbeat(payload=payload, remote_ip=remote_ip)
+    if hasattr(device, "touch_heartbeat"):
+        device.touch_heartbeat(payload=payload, remote_ip=remote_ip)
     return device
 
 
@@ -586,32 +617,20 @@ def _save_attendance_row(device, row, remote_ip, source_label="device_push"):
         )
         return False
 
-    if _attendance_already_exists(member, staff, device, device_user_id, event_dt):
-        BiometricSyncLog.objects.create(
-            device=device,
-            member=member,
-            staff=staff,
-            action=BiometricSyncLog.Action.RAW_EVENT,
-            device_user_id=device_user_id,
-            success=True,
-            payload=json.dumps(row),
-            response="Duplicate skipped",
-            notes="Duplicate attendance within 3-second window.",
-        )
-        return True
-
-    AttendanceLog.objects.create(
+    AttendanceLog.objects.get_or_create(
         member=member,
         staff=staff,
         date=timezone.localtime(event_dt).date(),
         check_in_time=event_dt,
-        source=AttendanceLog.Source.DEVICE,
-        verification_mode=AttendanceLog.VerificationMode.DEVICE,
         device=device,
-        device_identifier=device.serial_number if device else "",
         device_user_id=device_user_id,
-        status=AttendanceLog.Status.PRESENT,
-        remarks=f"Imported from {source_label}",
+        defaults={
+            "source": AttendanceLog.Source.DEVICE,
+            "verification_mode": AttendanceLog.VerificationMode.DEVICE,
+            "device_identifier": device.serial_number if device else "",
+            "status": AttendanceLog.Status.PRESENT,
+            "remarks": f"Imported from {source_label}",
+        },
     )
 
     BiometricSyncLog.objects.create(
@@ -722,7 +741,16 @@ def biometric_get_request(request):
         return HttpResponse("OK", content_type="text/plain")
 
     command_text = _render_command_text(command)
-    command.mark_sent(response_payload=command_text)
+
+    if hasattr(command, "mark_sent"):
+        command.mark_sent(response_payload=command_text)
+    else:
+        command.status = getattr(BiometricDeviceCommand.Status, "SENT", command.status)
+        if hasattr(command, "sent_at"):
+            command.sent_at = timezone.now()
+        if hasattr(command, "response_payload"):
+            command.response_payload = command_text
+        command.save()
 
     BiometricSyncLog.objects.create(
         device=device,
@@ -779,3 +807,15 @@ def ebioserver_webhook(request):
     )
 
     return HttpResponse("OK", content_type="text/plain")
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def biometric_device_getrequest(request):
+    return biometric_get_request(request)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def biometric_device_listener(request):
+    return biometric_endpoint(request)
