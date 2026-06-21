@@ -1,6 +1,7 @@
 import json
 import logging
 from typing import Any, Dict, Optional
+
 import requests
 from django.db import transaction
 from django.utils import timezone
@@ -57,41 +58,65 @@ class BiometricSyncService:
             response=json.dumps(response, default=str) if response is not None else '',
             notes=notes or '',
         )
-    
-    def push_to_ebioserver(self, member):
-    try:
-        payload = {
-            "UserName": "admin",
-            "Password": "admin",
-            "EmployeeCode": member.member_id,
-            "EmployeeName": member.full_name,
-            "EmployeeLocation": "GYM",
-            "EmployeeRole": "Normal User",
-            "EmployeeVerificationType": "0",
-        }
 
-        response = requests.post(
-            "http://localhost:85/iclock/webservice.asmx/UpdateEmployee",
-            data=payload,
-            timeout=20,
-        )
-
-        if "success" in response.text.lower():
+    def push_to_ebioserver(self, target: Any, device_user_id: str) -> Dict[str, Any]:
+        if not isinstance(target, Member):
             return {
-                "ok": True,
-                "message": "Member synced through eBioServer.",
+                'ok': False,
+                'message': 'eBioServer sync is currently supported for members only.',
             }
 
-        return {
-            "ok": False,
-            "message": response.text,
+        payload = {
+            'UserName': 'admin',
+            'Password': 'admin',
+            'EmployeeCode': device_user_id or target.member_id,
+            'EmployeeName': target.full_name,
+            'EmployeeLocation': 'GYM',
+            'EmployeeRole': 'Normal User',
+            'EmployeeVerificationType': '0',
         }
 
-    except Exception as exc:
-        return {
-            "ok": False,
-            "message": str(exc),
-        }
+        try:
+            response = requests.post(
+                'http://localhost:85/iclock/webservice.asmx/UpdateEmployee',
+                data=payload,
+                timeout=20,
+            )
+            response.raise_for_status()
+
+            result = {
+                'ok': True,
+                'message': 'Member synced through eBioServer.',
+                'status_code': response.status_code,
+                'response_text': response.text[:2000],
+            }
+
+            self.create_sync_log(
+                action=BiometricSyncLog.Action.ENROLLMENT,
+                payload=payload,
+                response=result,
+                target=target,
+                device_user_id=device_user_id,
+                success=True,
+                notes='Enrollment pushed to eBioServer UpdateEmployee endpoint.',
+            )
+            return result
+
+        except requests.RequestException as exc:
+            result = {
+                'ok': False,
+                'message': str(exc),
+            }
+            self.create_sync_log(
+                action=BiometricSyncLog.Action.ENROLLMENT,
+                payload=payload,
+                response=result,
+                target=target,
+                device_user_id=device_user_id,
+                success=False,
+                notes='eBioServer request failed.',
+            )
+            return result
 
     def resolve_software_target(self, device_user_id: str):
         if not device_user_id:
@@ -228,14 +253,11 @@ class BiometricSyncService:
         return None
 
     def push_enrollment(self, target: Any, device_user_id: str) -> Dict[str, Any]:
-        if (
-            self.device.device_type
-            == BiometricDevice.DeviceType.AIFACE
-        ):
-    return self.push_to_ebioserver(target)
-
         if not target or not device_user_id:
             return {'ok': False, 'message': 'Target and device_user_id are required.'}
+
+        if self.device.device_type == BiometricDevice.DeviceType.AIFACE:
+            return self.push_to_ebioserver(target, device_user_id)
 
         try:
             assignment = self.reconcile_device_user(target, device_user_id)
@@ -270,7 +292,11 @@ class BiometricSyncService:
             device=self.device,
             member=target if isinstance(target, Member) else None,
             staff=target if isinstance(target, Staff) else None,
-            person_type=AttendanceLog.PersonType.MEMBER if isinstance(target, Member) else AttendanceLog.PersonType.STAFF,
+            person_type=(
+                AttendanceLog.PersonType.MEMBER
+                if isinstance(target, Member)
+                else AttendanceLog.PersonType.STAFF
+            ),
             command=BiometricDeviceCommand.CommandType.SYNC_USER,
             device_user_id=device_user_id,
             payload=json.dumps(payload, default=str),
