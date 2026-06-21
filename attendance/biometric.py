@@ -1,7 +1,7 @@
 import json
 import logging
 from typing import Any, Dict, Optional
-
+import requests
 from django.db import transaction
 from django.utils import timezone
 
@@ -57,6 +57,41 @@ class BiometricSyncService:
             response=json.dumps(response, default=str) if response is not None else '',
             notes=notes or '',
         )
+    
+    def push_to_ebioserver(self, member):
+    try:
+        payload = {
+            "UserName": "admin",
+            "Password": "admin",
+            "EmployeeCode": member.member_id,
+            "EmployeeName": member.full_name,
+            "EmployeeLocation": "GYM",
+            "EmployeeRole": "Normal User",
+            "EmployeeVerificationType": "0",
+        }
+
+        response = requests.post(
+            "http://localhost:85/iclock/webservice.asmx/UpdateEmployee",
+            data=payload,
+            timeout=20,
+        )
+
+        if "success" in response.text.lower():
+            return {
+                "ok": True,
+                "message": "Member synced through eBioServer.",
+            }
+
+        return {
+            "ok": False,
+            "message": response.text,
+        }
+
+    except Exception as exc:
+        return {
+            "ok": False,
+            "message": str(exc),
+        }
 
     def resolve_software_target(self, device_user_id: str):
         if not device_user_id:
@@ -193,6 +228,12 @@ class BiometricSyncService:
         return None
 
     def push_enrollment(self, target: Any, device_user_id: str) -> Dict[str, Any]:
+        if (
+            self.device.device_type
+            == BiometricDevice.DeviceType.AIFACE
+        ):
+    return self.push_to_ebioserver(target)
+
         if not target or not device_user_id:
             return {'ok': False, 'message': 'Target and device_user_id are required.'}
 
