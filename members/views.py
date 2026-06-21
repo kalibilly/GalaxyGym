@@ -20,7 +20,6 @@ from attendance.models import (
     DeviceUserLink,
     MemberBiometricDeviceStatus,
 )
-import devices
 from staffs.models import Staff
 
 from .forms import (
@@ -117,19 +116,20 @@ class MemberCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
         self.object.created_by = self.request.user
         self.object.updated_by = self.request.user
         self.object.save()
+        form.save_m2m()
 
-            devices = BiometricDevice.objects.filter(
-                device_type=BiometricDevice.DeviceType.AIFACE,
-                is_active=True,
+        devices = BiometricDevice.objects.filter(
+            device_type=BiometricDevice.DeviceType.AIFACE,
+            is_active=True,
+        )
+
+        for device in devices:
+            service = BiometricSyncService(device)
+            service.push_enrollment(
+                self.object,
+                self.object.device_user_id or self.object.member_id,
             )
 
-            for device in devices:
-                service = BiometricSyncService(device)
-                service.push_enrollment(
-                    self.object,
-                    self.object.member_id,
-                )
-        form.save_m2m()
         messages.success(self.request, self.success_message)
         return redirect(self.success_url)
 
@@ -145,18 +145,20 @@ class MemberUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         self.object = form.save(commit=False)
         self.object.updated_by = self.request.user
         self.object.save()
+        form.save_m2m()
+
         devices = BiometricDevice.objects.filter(
-        device_type=BiometricDevice.DeviceType.AIFACE,
-        is_active=True,
+            device_type=BiometricDevice.DeviceType.AIFACE,
+            is_active=True,
         )
 
         for device in devices:
-        service = BiometricSyncService(device)
-        service.push_enrollment(
-            self.object,
-            self.object.member_id,
-        )
-        form.save_m2m()
+            service = BiometricSyncService(device)
+            service.push_enrollment(
+                self.object,
+                self.object.device_user_id or self.object.member_id,
+            )
+
         messages.success(self.request, self.success_message)
         return redirect(self.success_url)
 
