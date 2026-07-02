@@ -8,7 +8,6 @@ from .views import (
     bridge_entry,
     device_enrollment,
     device_sync_status,
-    ebioserver_webhook,
 )
 
 urlpatterns = [
@@ -50,7 +49,4 @@ urlpatterns = [
     path("access-sync/", access_sync, name="access_sync"),
     path("device-sync/status/", device_sync_status, name="device_sync_status"),
     path("device-sync/enroll/", device_enrollment, name="device_enrollment"),
-
-    path("ebioserver/", ebioserver_webhook, name="ebioserver_webhook"),
-    path("ebioserver", ebioserver_webhook, name="ebioserver_webhook_noslash"),
 ]
