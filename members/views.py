@@ -20,6 +20,7 @@ from attendance.models import (
     DeviceUserLink,
     MemberBiometricDeviceStatus,
 )
+import devices
 from staffs.models import Staff
 
 from .forms import (
@@ -116,8 +117,6 @@ class MemberCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
         self.object.created_by = self.request.user
         self.object.updated_by = self.request.user
         self.object.save()
-        form.save_m2m()
-
         devices = BiometricDevice.objects.filter(
             device_type=BiometricDevice.DeviceType.AIFACE,
             is_active=True,
@@ -125,11 +124,12 @@ class MemberCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
 
         for device in devices:
             service = BiometricSyncService(device)
-            service.push_enrollment(
-                self.object,
-                self.object.device_user_id or self.object.member_id,
-            )
-
+            try:
+                service.update_employee_ex(self.object)
+            except Exception:
+                # Don't block creation on sync errors; log via service
+                pass
+        form.save_m2m()
         messages.success(self.request, self.success_message)
         return redirect(self.success_url)
 
@@ -145,8 +145,6 @@ class MemberUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         self.object = form.save(commit=False)
         self.object.updated_by = self.request.user
         self.object.save()
-        form.save_m2m()
-
         devices = BiometricDevice.objects.filter(
             device_type=BiometricDevice.DeviceType.AIFACE,
             is_active=True,
@@ -154,11 +152,11 @@ class MemberUpdateView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
 
         for device in devices:
             service = BiometricSyncService(device)
-            service.push_enrollment(
-                self.object,
-                self.object.device_user_id or self.object.member_id,
-            )
-
+            try:
+                service.update_employee_ex(self.object)
+            except Exception:
+                pass
+        form.save_m2m()
         messages.success(self.request, self.success_message)
         return redirect(self.success_url)
 
@@ -217,6 +215,17 @@ class MemberDeleteRequestReviewView(RoleRequiredMixin, SuccessMessageMixin, Upda
             member = form.instance.member
             member.status = Member.STATUS_INACTIVE
             member.save(update_fields=['status'])
+            # remove from devices
+            devices = BiometricDevice.objects.filter(
+                device_type=BiometricDevice.DeviceType.AIFACE,
+                is_active=True,
+            )
+            for device in devices:
+                service = BiometricSyncService(device)
+                try:
+                    service.delete_employee(member)
+                except Exception:
+                    pass
 
         messages.success(self.request, self.success_message)
         return response
