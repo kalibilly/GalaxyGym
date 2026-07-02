@@ -1,8 +1,271 @@
+import base64
+import io
 import json
 import logging
 from typing import Any, Dict, Optional
+from datetime import timedelta
 
 import requests
+from django.conf import settings
+from django.db import transaction
+from django.utils import timezone
+
+from members.models import Member
+from staffs.models import Staff
+
+from .models import (
+    AttendanceLog,
+    BiometricDevice,
+    BiometricDeviceCommand,
+    BiometricSyncLog,
+    DeviceUserLink,
+    MemberBiometricDeviceStatus,
+    StaffBiometricDeviceStatus,
+)
+
+logger = logging.getLogger("biometric")
+
+
+class BiometricSyncError(Exception):
+    pass
+
+
+class BiometricSyncService:
+    """Service for syncing users with eBioServer (SOAP 1.1).
+
+    Uses settings.EBIOSERVER_BASE_URL, settings.EBIOSERVER_USER and
+    settings.EBIOSERVER_PASSWORD to authenticate. Constructs SOAP XML
+    for UpdateEmployeeEx and DeleteEmployee endpoints.
+    """
+
+    def __init__(self, device: BiometricDevice):
+        self.device = device
+
+    def create_sync_log(
+        self,
+        action: str,
+        payload: Any = None,
+        response: Any = None,
+        target: Optional[Any] = None,
+        device_user_id: Optional[str] = None,
+        success: bool = True,
+        notes: str = "",
+    ) -> BiometricSyncLog:
+        person_type = ""
+        if isinstance(target, Member):
+            person_type = AttendanceLog.PersonType.MEMBER
+        elif isinstance(target, Staff):
+            person_type = AttendanceLog.PersonType.STAFF
+
+        return BiometricSyncLog.objects.create(
+            device=self.device,
+            member=target if isinstance(target, Member) else None,
+            staff=target if isinstance(target, Staff) else None,
+            person_type=person_type,
+            action=action,
+            device_user_id=device_user_id or "",
+            success=success,
+            payload=json.dumps(payload, default=str) if payload is not None else "",
+            response=json.dumps(response, default=str) if response is not None else "",
+            notes=notes or "",
+        )
+
+    def _employee_code(self, target: Any) -> str:
+        if not target:
+            return ""
+        return getattr(target, "device_user_id", None) or getattr(target, "member_id", None) or getattr(target, "staff_id", "")
+
+    def _employee_location(self, target: Any) -> str:
+        try:
+            if hasattr(target, "assigned_staff") and target.assigned_staff and getattr(target.assigned_staff, "department", None):
+                dept = target.assigned_staff.department
+                return getattr(dept, "name", "Main Gym") or "Main Gym"
+            if hasattr(target, "department") and getattr(target, "department", None):
+                return getattr(target.department, "name", "Main Gym") or "Main Gym"
+        except Exception:
+            pass
+        return "Main Gym"
+
+    def _employee_role(self, target: Any) -> str:
+        return "Member" if isinstance(target, Member) else "Staff"
+
+    def _employee_verification_type(self) -> str:
+        return "1"
+
+    def _format_date(self, d):
+        if not d:
+            return timezone.localdate().strftime("%Y-%m-%d")
+        return d.strftime("%Y-%m-%d")
+
+    def _employee_expiry_range(self, target: Any):
+        today = timezone.localdate()
+        expiry_from = today
+        expiry_to = today
+
+        active = getattr(target, "active_membership", None)
+        if active:
+            try:
+                expiry_from = active.start_date or today
+                expiry_to = active.end_date or today
+            except Exception:
+                expiry_from = today
+                expiry_to = today
+
+        if not active or expiry_to < today:
+            expiry_to = today - timedelta(days=1)
+
+        return self._format_date(expiry_from), self._format_date(expiry_to)
+
+    def _employee_card_number(self, target: Any) -> str:
+        return getattr(target, "card_number", "") or ""
+
+    def _employee_photo_b64(self, target: Any) -> str:
+        if not hasattr(target, "photo") or not getattr(target, "photo"):
+            return ""
+        try:
+            f = target.photo.open("rb")
+            data = f.read()
+            f.close()
+            return base64.b64encode(data).decode("ascii")
+        except Exception:
+            return ""
+
+    def _soap_post(self, op_path: str, soap_action: str, body_xml: str, timeout: int = 20) -> Dict[str, Any]:
+        base = getattr(settings, "EBIOSERVER_BASE_URL", "").rstrip("/")
+        if not base:
+            raise BiometricSyncError("EBIOSERVER_BASE_URL is not configured in settings.")
+
+        url = f"{base}{op_path}"
+        headers = {
+            "Content-Type": "text/xml; charset=utf-8",
+            "SOAPAction": soap_action,
+        }
+        try:
+            resp = requests.post(url, data=body_xml.encode("utf-8"), headers=headers, timeout=timeout)
+            return {"ok": True, "status_code": resp.status_code, "text": resp.text}
+        except Exception as exc:
+            return {"ok": False, "message": str(exc)}
+
+    def _build_updateemployeeex_xml(self, target: Any) -> str:
+        user = getattr(settings, "EBIOSERVER_USER", "")
+        pwd = getattr(settings, "EBIOSERVER_PASSWORD", "")
+
+        emp_code = self._employee_code(target)
+        emp_name = getattr(target, "full_name", "") or ""
+        emp_loc = self._employee_location(target)
+        emp_role = self._employee_role(target)
+        ver_type = self._employee_verification_type()
+        expiry_from, expiry_to = self._employee_expiry_range(target)
+        card = self._employee_card_number(target)
+        group_id = "1"
+        photo_b64 = self._employee_photo_b64(target)
+
+        xml = f"""<?xml version='1.0' encoding='utf-8'?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <UpdateEmployeeEx xmlns="http://tempuri.org/">
+      <UserName>{user}</UserName>
+      <Password>{pwd}</Password>
+      <EmployeeCode>{emp_code}</EmployeeCode>
+      <EmployeeName>{emp_name}</EmployeeName>
+      <EmployeeLocation>{emp_loc}</EmployeeLocation>
+      <EmployeeRole>{emp_role}</EmployeeRole>
+      <EmployeeVerificationType>{ver_type}</EmployeeVerificationType>
+      <EmployeeExpiryFrom>{expiry_from}</EmployeeExpiryFrom>
+      <EmployeeExpiryTo>{expiry_to}</EmployeeExpiryTo>
+      <EmployeeCardNumber>{card}</EmployeeCardNumber>
+      <GroupId>{group_id}</GroupId>
+      <EmployeePhoto>{photo_b64}</EmployeePhoto>
+    </UpdateEmployeeEx>
+  </soap:Body>
+</soap:Envelope>"""
+        return xml
+
+    def _build_deleteemployee_xml(self, employee_code: str) -> str:
+        user = getattr(settings, "EBIOSERVER_USER", "")
+        pwd = getattr(settings, "EBIOSERVER_PASSWORD", "")
+        xml = f"""<?xml version='1.0' encoding='utf-8'?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <DeleteEmployee xmlns="http://tempuri.org/">
+      <UserName>{user}</UserName>
+      <Password>{pwd}</Password>
+      <EmployeeCode>{employee_code}</EmployeeCode>
+    </DeleteEmployee>
+  </soap:Body>
+</soap:Envelope>"""
+        return xml
+
+    def update_employee_ex(self, target: Any) -> Dict[str, Any]:
+        xml = self._build_updateemployeeex_xml(target)
+        op_path = "/iclock/webservice.asmx?op=UpdateEmployeeEx"
+        soap_action = "http://tempuri.org/UpdateEmployeeEx"
+        result = self._soap_post(op_path, soap_action, xml)
+        self.create_sync_log(action=BiometricSyncLog.Action.ENROLLMENT, payload=xml, response=result, target=target, device_user_id=self._employee_code(target), success=bool(result.get("ok")))
+        return result
+
+    def delete_employee(self, target_or_code, target: Optional[Any] = None) -> Dict[str, Any]:
+        if isinstance(target_or_code, str):
+            employee_code = target_or_code
+        else:
+            employee_code = self._employee_code(target_or_code)
+            if not target:
+                target = target_or_code
+
+        xml = self._build_deleteemployee_xml(employee_code)
+        op_path = "/iclock/webservice.asmx?op=DeleteEmployee"
+        soap_action = "http://tempuri.org/DeleteEmployee"
+        result = self._soap_post(op_path, soap_action, xml)
+        self.create_sync_log(action=BiometricSyncLog.Action.DELETE, payload=xml, response=result, target=target, device_user_id=employee_code, success=bool(result.get("ok")))
+        return result
+
+    def push_enrollment(self, target: Any, device_user_id: str = None) -> Dict[str, Any]:
+        if not target:
+            return {"ok": False, "message": "Target is required."}
+        try:
+            result = self.update_employee_ex(target)
+            return result
+        except BiometricSyncError as exc:
+            return {"ok": False, "message": str(exc)}
+
+    def push_delete(self, target: Any = None, device_user_id: str = None) -> Dict[str, Any]:
+        code = device_user_id or (self._employee_code(target) if target else "")
+        if not code:
+            return {"ok": False, "message": "EmployeeCode required for delete."}
+        try:
+            result = self.delete_employee(code, target=target)
+            return result
+        except BiometricSyncError as exc:
+            return {"ok": False, "message": str(exc)}
+
+    def probe(self) -> Dict[str, Any]:
+        result = {
+            "ok": True,
+            "device_type": self.device.device_type,
+            "serial_number": self.device.serial_number,
+            "device_name": self.device.device_name,
+            "last_seen_at": self.device.last_seen_at.isoformat() if self.device.last_seen_at else None,
+            "last_known_ip": self.device.last_known_ip,
+            "message": "Device record is available.",
+        }
+        self.device.last_sync_at = timezone.now()
+        self.device.save(update_fields=["last_sync_at"])
+        self.create_sync_log(action=BiometricSyncLog.Action.DEVICE_HEARTBEAT, payload={"status_check": True}, response=result, success=True)
+        return result
+
+    @transaction.atomic
+    def synchronize_device(self) -> Dict[str, Any]:
+        result = {"ok": True, "message": "Synchronization is handled via eBioServer SOAP calls.", "device_serial": self.device.serial_number}
+        self.create_sync_log(action=BiometricSyncLog.Action.DEVICE_SYNC, payload={"mode": "ebioserver-soap"}, response=result, success=True)
+        return result
+import base64
+import json
+import logging
+from datetime import date, timedelta
+from typing import Any, Dict, Optional
+
+import requests
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -58,282 +321,295 @@ class BiometricSyncService:
             response=json.dumps(response, default=str) if response is not None else '',
             notes=notes or '',
         )
+    
+    def push_to_ebioserver(self, member):
+        # Deprecated convenience method retained for compatibility. Use
+        # `update_employee_ex` / `delete_employee` for full SOAP flows.
+        return {'ok': False, 'message': 'Use update_employee_ex or delete_employee instead.'}
 
-    def push_to_ebioserver(self, target: Any, device_user_id: str) -> Dict[str, Any]:
-        if not isinstance(target, Member):
-            return {
-                'ok': False,
-                'message': 'eBioServer sync is currently supported for members only.',
-            }
+    def _soap_post(self, path: str, soap_action: str, body_xml: str, timeout: int = 20) -> Dict[str, Any]:
+        base = getattr(settings, 'EBIOSERVER_BASE_URL', '').rstrip('/')
+        if not base:
+            raise BiometricSyncError('EBIOSERVER_BASE_URL is not configured in settings.')
 
-        payload = {
-            'UserName': 'admin',
-            'Password': 'admin',
-            'EmployeeCode': device_user_id or target.member_id,
-            'EmployeeName': target.full_name,
-            'EmployeeLocation': 'GYM',
-            'EmployeeRole': 'Normal User',
-            'EmployeeVerificationType': '0',
+        url = f"{base}{path}"
+        headers = {
+            'Content-Type': 'text/xml; charset=utf-8',
+            'SOAPAction': soap_action,
         }
-
         try:
-            response = requests.post(
-                'http://localhost:85/iclock/webservice.asmx/UpdateEmployee',
-                data=payload,
-                timeout=20,
-            )
-            response.raise_for_status()
+            resp = requests.post(url, data=body_xml.encode('utf-8'), headers=headers, timeout=timeout)
+            return {'ok': True, 'status_code': resp.status_code, 'text': resp.text}
+        import base64
+        import io
+        import json
+        import logging
+        from typing import Any, Dict, Optional
+        from datetime import timedelta
 
-            result = {
-                'ok': True,
-                'message': 'Member synced through eBioServer.',
-                'status_code': response.status_code,
-                'response_text': response.text[:2000],
-            }
+        import requests
+        from django.conf import settings
+        from django.db import transaction
+        from django.utils import timezone
 
-            self.create_sync_log(
-                action=BiometricSyncLog.Action.ENROLLMENT,
-                payload=payload,
-                response=result,
-                target=target,
-                device_user_id=device_user_id,
-                success=True,
-                notes='Enrollment pushed to eBioServer UpdateEmployee endpoint.',
-            )
-            return result
+        from members.models import Member
+        from staffs.models import Staff
 
-        except requests.RequestException as exc:
-            result = {
-                'ok': False,
-                'message': str(exc),
-            }
-            self.create_sync_log(
-                action=BiometricSyncLog.Action.ENROLLMENT,
-                payload=payload,
-                response=result,
-                target=target,
-                device_user_id=device_user_id,
-                success=False,
-                notes='eBioServer request failed.',
-            )
-            return result
+        from .models import (
+            AttendanceLog,
+            BiometricDevice,
+            BiometricDeviceCommand,
+            BiometricSyncLog,
+            DeviceUserLink,
+            MemberBiometricDeviceStatus,
+            StaffBiometricDeviceStatus,
+        )
 
-    def resolve_software_target(self, device_user_id: str):
-        if not device_user_id:
-            return None
+        logger = logging.getLogger("biometric")
 
-        member = Member.objects.filter(device_user_id=device_user_id).first()
-        if member:
-            return member
 
-        staff = Staff.objects.filter(device_user_id=device_user_id).first()
-        if staff:
-            return staff
+        class BiometricSyncError(Exception):
+            pass
 
-        return None
 
-    def assign_device_user_id(self, target: Any, device_user_id: str) -> bool:
-        if not device_user_id or not target:
-            raise BiometricSyncError('Missing target or device_user_id for assignment.')
+        class BiometricSyncService:
+            """Service for syncing users with eBioServer (SOAP 1.1).
 
-        existing_target = self.resolve_software_target(device_user_id)
-        if existing_target and (
-            existing_target.__class__ != target.__class__ or existing_target.pk != target.pk
-        ):
-            raise BiometricSyncError(
-                f'Device user ID {device_user_id} is already assigned to another account.'
-            )
+            Uses settings.EBIOSERVER_BASE_URL, settings.EBIOSERVER_USER and
+            settings.EBIOSERVER_PASSWORD to authenticate. Constructs SOAP XML
+            for UpdateEmployeeEx and DeleteEmployee endpoints.
+            """
 
-        current_target_id = getattr(target, 'device_user_id', None)
-        if current_target_id and current_target_id != device_user_id:
-            raise BiometricSyncError(
-                'Software master mapping conflict: target already has a different device_user_id.'
-            )
+            def __init__(self, device: BiometricDevice):
+                self.device = device
 
-        target.device_user_id = device_user_id
-        target.save(update_fields=['device_user_id'])
-        return True
+            def create_sync_log(
+                self,
+                action: str,
+                payload: Any = None,
+                response: Any = None,
+                target: Optional[Any] = None,
+                device_user_id: Optional[str] = None,
+                success: bool = True,
+                notes: str = "",
+            ) -> BiometricSyncLog:
+                person_type = ""
+                if isinstance(target, Member):
+                    person_type = AttendanceLog.PersonType.MEMBER
+                elif isinstance(target, Staff):
+                    person_type = AttendanceLog.PersonType.STAFF
 
-    def reconcile_device_user(self, target: Any, reported_device_user_id: str) -> Dict[str, Any]:
-        if not target or not reported_device_user_id:
-            raise BiometricSyncError('Both target and reported_device_user_id are required.')
+                return BiometricSyncLog.objects.create(
+                    device=self.device,
+                    member=target if isinstance(target, Member) else None,
+                    staff=target if isinstance(target, Staff) else None,
+                    person_type=person_type,
+                    action=action,
+                    device_user_id=device_user_id or "",
+                    success=success,
+                    payload=json.dumps(payload, default=str) if payload is not None else "",
+                    response=json.dumps(response, default=str) if response is not None else "",
+                    notes=notes or "",
+                )
 
-        current_id = getattr(target, 'device_user_id', None)
-        if not current_id:
-            existing_target = self.resolve_software_target(reported_device_user_id)
-            if existing_target and (
-                existing_target.__class__ != target.__class__ or existing_target.pk != target.pk
-            ):
-                return {
-                    'ok': False,
-                    'reason': 'Reported device_user_id is already assigned to another software account.',
+            # --- Helpers for building eBioServer parameters ---
+            def _employee_code(self, target: Any) -> str:
+                if not target:
+                    return ""
+                return getattr(target, "device_user_id", None) or getattr(target, "member_id", None) or getattr(target, "staff_id", "")
+
+            def _employee_location(self, target: Any) -> str:
+                # Prefer assigned department for Member (via assigned_staff), else staff.department, else default
+                try:
+                    if hasattr(target, "assigned_staff") and target.assigned_staff and getattr(target.assigned_staff, "department", None):
+                        dept = target.assigned_staff.department
+                        return getattr(dept, "name", "Main Gym") or "Main Gym"
+                    if hasattr(target, "department") and getattr(target, "department", None):
+                        return getattr(target.department, "name", "Main Gym") or "Main Gym"
+                except Exception:
+                    pass
+                return "Main Gym"
+
+            def _employee_role(self, target: Any) -> str:
+                return "Member" if isinstance(target, Member) else "Staff"
+
+            def _employee_verification_type(self) -> str:
+                return "1"
+
+            def _format_date(self, d):
+                if not d:
+                    return timezone.localdate().strftime("%Y-%m-%d")
+                return d.strftime("%Y-%m-%d")
+
+            def _employee_expiry_range(self, target: Any):
+                today = timezone.localdate()
+                expiry_from = today
+                expiry_to = today
+
+                active = getattr(target, "active_membership", None)
+                if active:
+                    try:
+                        expiry_from = active.start_date or today
+                        expiry_to = active.end_date or today
+                    except Exception:
+                        expiry_from = today
+                        expiry_to = today
+
+                # If no active membership or membership already expired, set expiry_to to yesterday
+                if not active or expiry_to < today:
+                    expiry_to = today - timedelta(days=1)
+
+                return self._format_date(expiry_from), self._format_date(expiry_to)
+
+            def _employee_card_number(self, target: Any) -> str:
+                return getattr(target, "card_number", "") or ""
+
+            def _employee_photo_b64(self, target: Any) -> str:
+                if not hasattr(target, "photo") or not getattr(target, "photo"):
+                    return ""
+                try:
+                    f = target.photo.open("rb")
+                    data = f.read()
+                    f.close()
+                    return base64.b64encode(data).decode("ascii")
+                except Exception:
+                    return ""
+
+            # --- SOAP builders / callers ---
+            def _soap_post(self, op_path: str, soap_action: str, body_xml: str, timeout: int = 20) -> Dict[str, Any]:
+                base = getattr(settings, "EBIOSERVER_BASE_URL", "").rstrip("/")
+                if not base:
+                    raise BiometricSyncError("EBIOSERVER_BASE_URL is not configured in settings.")
+
+                url = f"{base}{op_path}"
+                headers = {
+                    "Content-Type": "text/xml; charset=utf-8",
+                    "SOAPAction": soap_action,
                 }
-            self.assign_device_user_id(target, reported_device_user_id)
-            return {
-                'ok': True,
-                'action': 'assigned',
-                'device_user_id': reported_device_user_id,
-            }
+                try:
+                    resp = requests.post(url, data=body_xml.encode("utf-8"), headers=headers, timeout=timeout)
+                    return {"ok": True, "status_code": resp.status_code, "text": resp.text}
+                except Exception as exc:
+                    return {"ok": False, "message": str(exc)}
 
-        if current_id != reported_device_user_id:
-            return {
-                'ok': False,
-                'reason': 'Software authoritatively owns the target mapping. Device-reported ID does not match the existing assignment.',
-                'expected_device_user_id': current_id,
-            }
+            def _build_updateemployeeex_xml(self, target: Any) -> str:
+                user = getattr(settings, "EBIOSERVER_USER", "")
+                pwd = getattr(settings, "EBIOSERVER_PASSWORD", "")
 
-        return {
-            'ok': True,
-            'action': 'verified',
-            'device_user_id': current_id,
-        }
+                emp_code = self._employee_code(target)
+                emp_name = getattr(target, "full_name", "") or ""
+                emp_loc = self._employee_location(target)
+                emp_role = self._employee_role(target)
+                ver_type = self._employee_verification_type()
+                expiry_from, expiry_to = self._employee_expiry_range(target)
+                card = self._employee_card_number(target)
+                group_id = "1"
+                photo_b64 = self._employee_photo_b64(target)
 
-    def _get_member_status(self, member: Member):
-        status_obj, _ = MemberBiometricDeviceStatus.objects.get_or_create(
-            member=member,
-            device=self.device,
-            defaults={'device_user_id': member.device_user_id or member.member_id},
-        )
-        expected_id = member.device_user_id or member.member_id
-        if expected_id and status_obj.device_user_id != expected_id:
-            status_obj.device_user_id = expected_id
-            status_obj.save(update_fields=['device_user_id'])
-        return status_obj
+                # Build SOAP 1.1 envelope for UpdateEmployeeEx
+                xml = f"""<?xml version='1.0' encoding='utf-8'?>
+        <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+          <soap:Body>
+            <UpdateEmployeeEx xmlns="http://tempuri.org/">
+              <UserName>{user}</UserName>
+              <Password>{pwd}</Password>
+              <EmployeeCode>{emp_code}</EmployeeCode>
+              <EmployeeName>{emp_name}</EmployeeName>
+              <EmployeeLocation>{emp_loc}</EmployeeLocation>
+              <EmployeeRole>{emp_role}</EmployeeRole>
+              <EmployeeVerificationType>{ver_type}</EmployeeVerificationType>
+              <EmployeeExpiryFrom>{expiry_from}</EmployeeExpiryFrom>
+              <EmployeeExpiryTo>{expiry_to}</EmployeeExpiryTo>
+              <EmployeeCardNumber>{card}</EmployeeCardNumber>
+              <GroupId>{group_id}</GroupId>
+              <EmployeePhoto>{photo_b64}</EmployeePhoto>
+            </UpdateEmployeeEx>
+          </soap:Body>
+        </soap:Envelope>"""
+                return xml
 
-    def _get_staff_status(self, staff: Staff):
-        status_obj, _ = StaffBiometricDeviceStatus.objects.get_or_create(
-            staff=staff,
-            device=self.device,
-            defaults={'device_user_id': staff.device_user_id or staff.staff_id},
-        )
-        expected_id = staff.device_user_id or staff.staff_id
-        if expected_id and status_obj.device_user_id != expected_id:
-            status_obj.device_user_id = expected_id
-            status_obj.save(update_fields=['device_user_id'])
-        return status_obj
+            def _build_deleteemployee_xml(self, employee_code: str) -> str:
+                user = getattr(settings, "EBIOSERVER_USER", "")
+                pwd = getattr(settings, "EBIOSERVER_PASSWORD", "")
+                xml = f"""<?xml version='1.0' encoding='utf-8'?>
+        <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+          <soap:Body>
+            <DeleteEmployee xmlns="http://tempuri.org/">
+              <UserName>{user}</UserName>
+              <Password>{pwd}</Password>
+              <EmployeeCode>{employee_code}</EmployeeCode>
+            </DeleteEmployee>
+          </soap:Body>
+        </soap:Envelope>"""
+                return xml
 
-    def _ensure_link(self, target: Any, device_user_id: str):
-        if not device_user_id:
-            return None
+            def update_employee_ex(self, target: Any) -> Dict[str, Any]:
+                """Call UpdateEmployeeEx on the configured eBioServer to create/update a user."""
+                xml = self._build_updateemployeeex_xml(target)
+                op_path = "/iclock/webservice.asmx?op=UpdateEmployeeEx"
+                soap_action = "http://tempuri.org/UpdateEmployeeEx"
+                result = self._soap_post(op_path, soap_action, xml)
+                self.create_sync_log(action=BiometricSyncLog.Action.ENROLLMENT, payload=xml, response=result, target=target, device_user_id=self._employee_code(target), success=bool(result.get("ok")))
+                return result
 
-        if isinstance(target, Member):
-            link, _ = DeviceUserLink.objects.get_or_create(
-                device_user_id=device_user_id,
-                defaults={
-                    'member': target,
-                    'person_type': DeviceUserLink.PersonType.MEMBER,
-                    'is_active': True,
-                },
-            )
-            if link.member_id != target.id or link.staff_id is not None or not link.is_active:
-                link.member = target
-                link.staff = None
-                link.person_type = DeviceUserLink.PersonType.MEMBER
-                link.is_active = True
-                link.save(update_fields=['member', 'staff', 'person_type', 'is_active'])
-            return link
+            def delete_employee(self, target_or_code, target: Optional[Any] = None) -> Dict[str, Any]:
+                # Accept either an employee code string or a target object (Member/Staff)
+                if isinstance(target_or_code, str):
+                    employee_code = target_or_code
+                else:
+                    employee_code = self._employee_code(target_or_code)
+                    if not target:
+                        target = target_or_code
 
-        if isinstance(target, Staff):
-            link, _ = DeviceUserLink.objects.get_or_create(
-                device_user_id=device_user_id,
-                defaults={
-                    'staff': target,
-                    'person_type': DeviceUserLink.PersonType.STAFF,
-                    'is_active': True,
-                },
-            )
-            if link.staff_id != target.id or link.member_id is not None or not link.is_active:
-                link.staff = target
-                link.member = None
-                link.person_type = DeviceUserLink.PersonType.STAFF
-                link.is_active = True
-                link.save(update_fields=['staff', 'member', 'person_type', 'is_active'])
-            return link
+                xml = self._build_deleteemployee_xml(employee_code)
+                op_path = "/iclock/webservice.asmx?op=DeleteEmployee"
+                soap_action = "http://tempuri.org/DeleteEmployee"
+                result = self._soap_post(op_path, soap_action, xml)
+                self.create_sync_log(action=BiometricSyncLog.Action.DELETE, payload=xml, response=result, target=target, device_user_id=employee_code, success=bool(result.get("ok")))
+                return result
 
-        return None
+            # Backwards-compatible wrapper used by views and tasks
+            def push_enrollment(self, target: Any, device_user_id: str = None) -> Dict[str, Any]:
+                # For eBioServer integration we always push via UpdateEmployeeEx
+                if not target:
+                    return {"ok": False, "message": "Target is required."}
 
-    def push_enrollment(self, target: Any, device_user_id: str) -> Dict[str, Any]:
-        if not target or not device_user_id:
-            return {'ok': False, 'message': 'Target and device_user_id are required.'}
+                try:
+                    result = self.update_employee_ex(target)
+                    return result
+                except BiometricSyncError as exc:
+                    return {"ok": False, "message": str(exc)}
 
-        if self.device.device_type == BiometricDevice.DeviceType.AIFACE:
-            return self.push_to_ebioserver(target, device_user_id)
+            def push_delete(self, target: Any = None, device_user_id: str = None) -> Dict[str, Any]:
+                code = device_user_id or (self._employee_code(target) if target else "")
+                if not code:
+                    return {"ok": False, "message": "EmployeeCode required for delete."}
+                try:
+                    result = self.delete_employee(code, target=target)
+                    return result
+                except BiometricSyncError as exc:
+                    return {"ok": False, "message": str(exc)}
 
-        try:
-            assignment = self.reconcile_device_user(target, device_user_id)
-        except BiometricSyncError as exc:
-            return {'ok': False, 'message': str(exc)}
+            def probe(self) -> Dict[str, Any]:
+                result = {
+                    "ok": True,
+                    "device_type": self.device.device_type,
+                    "serial_number": self.device.serial_number,
+                    "device_name": self.device.device_name,
+                    "last_seen_at": self.device.last_seen_at.isoformat() if self.device.last_seen_at else None,
+                    "last_known_ip": self.device.last_known_ip,
+                    "message": "Device record is available.",
+                }
+                self.device.last_sync_at = timezone.now()
+                self.device.save(update_fields=["last_sync_at"])
+                self.create_sync_log(action=BiometricSyncLog.Action.DEVICE_HEARTBEAT, payload={"status_check": True}, response=result, success=True)
+                return result
 
-        if not assignment.get('ok'):
-            self.create_sync_log(
-                action=BiometricSyncLog.Action.CONFLICT,
-                payload={'target': str(target), 'device_user_id': device_user_id},
-                response=assignment,
-                target=target,
-                device_user_id=device_user_id,
-                success=False,
-                notes='Conflict while reconciling device user mapping.',
-            )
-            return assignment
-
-        if isinstance(target, Member):
-            status_obj = self._get_member_status(target)
-        else:
-            status_obj = self._get_staff_status(target)
-
-        payload = {
-            'target': str(target),
-            'device_user_id': device_user_id,
-            'device_serial': self.device.serial_number,
-            'device_name': self.device.device_name,
-        }
-
-        command = BiometricDeviceCommand.objects.create(
-            device=self.device,
-            member=target if isinstance(target, Member) else None,
-            staff=target if isinstance(target, Staff) else None,
-            person_type=(
-                AttendanceLog.PersonType.MEMBER
-                if isinstance(target, Member)
-                else AttendanceLog.PersonType.STAFF
-            ),
-            command=BiometricDeviceCommand.CommandType.SYNC_USER,
-            device_user_id=device_user_id,
-            payload=json.dumps(payload, default=str),
-            status=BiometricDeviceCommand.Status.PENDING,
-            queued_at=timezone.now(),
-            notes='Queued for device polling.',
-        )
-
-        status_obj.sync_status = status_obj.SyncStatus.PENDING
-        status_obj.last_status_checked_at = timezone.now()
-        status_obj.last_error = ''
-        status_obj.notes = 'Enrollment queued and waiting for device poll.'
-        status_obj.save(update_fields=['sync_status', 'last_status_checked_at', 'last_error', 'notes'])
-
-        self._ensure_link(target, device_user_id)
-
-        result = {
-            'ok': True,
-            'queued': True,
-            'message': 'Enrollment command queued successfully.',
-            'command_id': command.pk,
-            'device_serial': self.device.serial_number,
-            'device_user_id': device_user_id,
-        }
-
-        self.create_sync_log(
-            action=BiometricSyncLog.Action.ENROLLMENT,
-            payload=payload,
-            response=result,
-            target=target,
-            device_user_id=device_user_id,
-            success=True,
-            notes='Enrollment queued for device polling.',
-        )
-        return result
-
-    def probe(self) -> Dict[str, Any]:
+            @transaction.atomic
+            def synchronize_device(self) -> Dict[str, Any]:
+                result = {"ok": True, "message": "Synchronization is handled via eBioServer SOAP calls.", "device_serial": self.device.serial_number}
+                self.create_sync_log(action=BiometricSyncLog.Action.DEVICE_SYNC, payload={"mode": "ebioserver-soap"}, response=result, success=True)
+                return result
         result = {
             'ok': True,
             'device_type': self.device.device_type,
