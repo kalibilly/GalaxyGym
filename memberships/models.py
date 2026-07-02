@@ -1,4 +1,5 @@
 import re
+import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -214,8 +215,37 @@ class Membership(TimeStampedModel):
         if not self.serial_number:
             self.serial_number = self.get_next_serial_number()
         self.final_amount = self.membership_amount - self.discount_amount
+        old_status = None
+        if self.pk:
+            try:
+                old = Membership.objects.filter(pk=self.pk).first()
+                if old:
+                    old_status = old.status
+            except Exception:
+                old_status = None
+
         self.status = self.derive_status()
         super().save(*args, **kwargs)
+
+        # If membership just expired, push expiry to biometric devices
+        try:
+            if self.status == self.STATUS_EXPIRED and old_status != self.STATUS_EXPIRED:
+                from attendance.models import BiometricDevice
+                from attendance.biometric import BiometricSyncService
+
+                devices = BiometricDevice.objects.filter(
+                    device_type=BiometricDevice.DeviceType.AIFACE,
+                    is_active=True,
+                )
+                member = self.member
+                for device in devices:
+                    try:
+                        BiometricSyncService(device).update_employee_ex(member)
+                    except Exception:
+                        logger = logging.getLogger('biometric')
+                        logger.exception('Failed to push membership expiry to device %s', getattr(device, 'serial_number', device.pk))
+        except Exception:
+            pass
 
     @property
     def duration_days_planned(self):
