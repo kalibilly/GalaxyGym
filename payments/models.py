@@ -1,4 +1,5 @@
 import re
+import logging
 from datetime import timedelta
 from decimal import Decimal
 
@@ -177,7 +178,39 @@ class Invoice(TimeStampedModel):
         self.status = self.derive_status()
 
         self.full_clean()
+        # detect status change
+        old_status = None
+        if self.pk:
+            try:
+                old = Invoice.objects.filter(pk=self.pk).first()
+                if old:
+                    old_status = old.status
+            except Exception:
+                old_status = None
+
         super().save(*args, **kwargs)
+
+        # If invoice just moved to overdue, push expired access to devices
+        try:
+            if self.status == self.STATUS_OVERDUE and old_status != self.STATUS_OVERDUE:
+                # run a best-effort push to all AIFACE devices
+                from attendance.models import BiometricDevice
+                from attendance.biometric import BiometricSyncService
+
+                devices = BiometricDevice.objects.filter(
+                    device_type=BiometricDevice.DeviceType.AIFACE,
+                    is_active=True,
+                )
+                member = self.member
+                for device in devices:
+                    try:
+                        BiometricSyncService(device).update_employee_ex(member)
+                    except Exception:
+                        logger = logging.getLogger('biometric')
+                        logger.exception('Failed to push overdue expiry to device %s', getattr(device, 'serial_number', device.pk))
+        except Exception:
+            # never fail invoice save due to sync issues
+            pass
 
 
 class Payment(TimeStampedModel):
