@@ -18,10 +18,7 @@ urlpatterns = [
     path('device/bridge-entry/', views.bridge_entry, name='bridge_entry'),
     path('device/access-sync/', views.access_sync, name='access_sync'),
 
-    # ADMS / PUSH endpoints for eSSL MB20 and eSSL AiFace Orcus
-    path('iclock/getrequest/', views.biometric_device_getrequest, name='iclock_getrequest'),
-    path('iclock/cdata/', views.biometric_device_cdata, name='iclock_cdata'),
-    path('iclock/', views.biometric_device_listener, name='iclock_listener'),
+    # Legacy device push endpoints removed: eBioServer SOAP is used instead.
 
     path('<int:pk>/update/', views.AttendanceUpdateView.as_view(), name='attendance_update'),
     path('<int:pk>/', views.AttendanceDetailView.as_view(), name='attendance_detail'),
