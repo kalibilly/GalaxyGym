@@ -7,6 +7,16 @@ from django.core.exceptions import ValidationError
 from .models import Membership, MembershipPlan
 
 
+class MembershipPlanSelect(forms.Select):
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        if value:
+            plan = MembershipPlan.objects.filter(pk=value).first()
+            if plan:
+                option['attrs']['data-price'] = str(plan.price)
+        return option
+
+
 class MembershipPlanForm(forms.ModelForm):
     class Meta:
         model = MembershipPlan
@@ -24,49 +34,95 @@ class MembershipPlanForm(forms.ModelForm):
 
 
 class MembershipForm(forms.ModelForm):
+    member_lookup = forms.CharField(required=False, label='Member ID')
+    member_name = forms.CharField(required=False, label='Member Name', disabled=True)
+    member_phone = forms.CharField(required=False, label='Member Phone', disabled=True)
+    member_joining = forms.CharField(required=False, label='Date of Joining', disabled=True)
+
     class Meta:
         model = Membership
         fields = [
+            'entry_number',
             'member',
             'plan',
             'start_date',
             'end_date',
-            'membership_amount',
+            'price_before_discount',
             'discount_amount',
+            'total_amount',
             'payment_status',
             'remarks',
         ]
         widgets = {
+            'entry_number': forms.TextInput(attrs={'placeholder': 'Invoice / entry number'}),
             'start_date': forms.DateInput(attrs={'type': 'date'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
             'remarks': forms.Textarea(attrs={'rows': 3}),
-            'membership_amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'price_before_discount': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'readonly': 'readonly'}),
             'discount_amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'total_amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'readonly': 'readonly'}),
         }
         labels = {
+            'entry_number': 'Entry Number',
             'member': 'Member',
             'plan': 'Membership Plan',
             'start_date': 'Start Date',
             'end_date': 'End Date',
-            'membership_amount': 'Membership Amount',
-            'discount_amount': 'Discount',
+            'price_before_discount': 'Price Before Discount',
+            'discount_amount': 'Discount Amount',
+            'total_amount': 'Total Amount',
             'payment_status': 'Payment Status',
             'remarks': 'Remarks',
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['plan'].widget = MembershipPlanSelect(choices=self.fields['plan'].choices)
+        self.fields['entry_number'].required = True
+        self.fields['member'].required = True
+        self.fields['plan'].required = True
+        self.fields['start_date'].required = True
+        self.fields['end_date'].required = True
+        self.fields['price_before_discount'].required = True
+        self.fields['discount_amount'].required = True
+        self.fields['total_amount'].required = True
+        self.fields['payment_status'].required = True
+        self.fields['remarks'].required = False
+        self.fields['member_lookup'].required = False
+
+        if self.instance and self.instance.pk and self.instance.plan_id:
+            self.fields['price_before_discount'].initial = self.instance.plan.price if self.instance.plan else self.instance.price_before_discount
+
+        if self.instance and self.instance.pk:
+            self.fields['member_lookup'].initial = self.instance.member.member_id if self.instance.member else ''
+            self.fields['member_name'].initial = self.instance.member.full_name if self.instance.member else ''
+            self.fields['member_phone'].initial = self.instance.member.phone_number if self.instance.member else ''
+            self.fields['member_joining'].initial = self.instance.member.date_of_joining if self.instance.member else ''
+
     def clean(self):
         cleaned_data = super().clean()
-        membership_amount = cleaned_data.get('membership_amount')
+        price_before_discount = cleaned_data.get('price_before_discount')
         discount_amount = cleaned_data.get('discount_amount')
 
-        if membership_amount is not None and membership_amount < 0:
-            self.add_error('membership_amount', 'Membership amount cannot be negative.')
+        if price_before_discount is not None and price_before_discount < 0:
+            self.add_error('price_before_discount', 'Price before discount cannot be negative.')
         if discount_amount is not None and discount_amount < 0:
             self.add_error('discount_amount', 'Discount cannot be negative.')
-        if membership_amount is not None and discount_amount is not None and discount_amount > membership_amount:
-            self.add_error('discount_amount', 'Discount cannot be greater than membership amount.')
+        if price_before_discount is not None and discount_amount is not None and discount_amount > price_before_discount:
+            self.add_error('discount_amount', 'Discount cannot be greater than the base price.')
 
         return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if instance.plan_id and instance.price_before_discount == 0:
+            instance.price_before_discount = instance.plan.price
+        if instance.discount_amount is None:
+            instance.discount_amount = 0
+        instance.total_amount = instance.price_before_discount - instance.discount_amount
+        if commit:
+            instance.save()
+        return instance
 
 
 class MembershipPurchaseForm(forms.Form):
