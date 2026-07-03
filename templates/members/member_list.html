@@ -48,22 +48,21 @@
     <table class="table table-hover align-middle">
         <thead>
             <tr>
+                <th>S.No.</th>
                 <th>Member ID</th>
-                <th>Device User ID</th>
                 <th>Name</th>
                 <th>Phone</th>
                 <th>Assigned Staff</th>
                 <th>Status</th>
-                <th>Front Device</th>
-                <th>Back Device</th>
+                <th>Photo</th>
                 <th class="text-end">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for member in member_list %}
                 <tr>
+                    <td>{{ forloop.counter }}</td>
                     <td>{{ member.member_id }}</td>
-                    <td>{{ member.device_user_id|default:"—" }}</td>
                     <td>
                         <a href="{% url 'members:detail' member.pk %}">{{ member.full_name }}</a>
                     </td>
@@ -84,145 +83,35 @@
                             <span class="badge bg-warning text-dark">{{ member.get_status_display }}</span>
                         {% endif %}
                     </td>
-
                     <td>
-                        {% if front_device %}
-                            <div class="small fw-semibold">
-                                {{ front_device.device_name|default:front_device.serial_number }}
-                            </div>
-
-                            {% if member.front_device_status %}
-                                <div class="mt-1">
-                                    {% if member.front_device_status.sync_status == 'success' %}
-                                        <span class="badge bg-success">Synced</span>
-                                    {% elif member.front_device_status.sync_status == 'sent' %}
-                                        <span class="badge bg-info text-dark">Sent</span>
-                                    {% elif member.front_device_status.sync_status == 'failed' %}
-                                        <span class="badge bg-danger">Failed</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Pending</span>
-                                    {% endif %}
-                                </div>
-
-                                <div class="small text-muted mt-1">
-                                    {% if member.front_device_status.is_enabled_on_device %}
-                                        Enabled on device
-                                    {% else %}
-                                        Not enabled on device
-                                    {% endif %}
-                                </div>
-
-                                {% if member.front_device_status.last_error %}
-                                    <div class="small text-danger mt-1">
-                                        {{ member.front_device_status.last_error }}
-                                    </div>
-                                {% endif %}
-
-                                {% if member.front_device_status.last_status_checked_at %}
-                                    <div class="small text-muted mt-1">
-                                        Checked {{ member.front_device_status.last_status_checked_at|date:"M d, Y H:i" }}
-                                    </div>
-                                {% endif %}
-                            {% else %}
-                                <div class="small text-muted mt-1">No status record</div>
-                            {% endif %}
+                        {% if member.photo %}
+                            <img src="{{ member.photo.url }}" alt="{{ member.full_name }}" class="img-thumbnail member-photo-thumb" data-bs-toggle="modal" data-bs-target="#photoModal{{ member.pk }}">
                         {% else %}
-                            <span class="text-muted">No device</span>
+                            <span class="text-muted">No photo</span>
                         {% endif %}
                     </td>
-
-                    <td>
-                        {% if back_device %}
-                            <div class="small fw-semibold">
-                                {{ back_device.device_name|default:back_device.serial_number }}
-                            </div>
-
-                            {% if member.back_device_status %}
-                                <div class="mt-1">
-                                    {% if member.back_device_status.sync_status == 'success' %}
-                                        <span class="badge bg-success">Synced</span>
-                                    {% elif member.back_device_status.sync_status == 'sent' %}
-                                        <span class="badge bg-info text-dark">Sent</span>
-                                    {% elif member.back_device_status.sync_status == 'failed' %}
-                                        <span class="badge bg-danger">Failed</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Pending</span>
-                                    {% endif %}
-                                </div>
-
-                                <div class="small text-muted mt-1">
-                                    {% if member.back_device_status.is_enabled_on_device %}
-                                        Enabled on device
-                                    {% else %}
-                                        Not enabled on device
-                                    {% endif %}
-                                </div>
-
-                                {% if member.back_device_status.last_error %}
-                                    <div class="small text-danger mt-1">
-                                        {{ member.back_device_status.last_error }}
-                                    </div>
-                                {% endif %}
-
-                                {% if member.back_device_status.last_status_checked_at %}
-                                    <div class="small text-muted mt-1">
-                                        Checked {{ member.back_device_status.last_status_checked_at|date:"M d, Y H:i" }}
-                                    </div>
-                                {% endif %}
-                            {% else %}
-                                <div class="small text-muted mt-1">No status record</div>
-                            {% endif %}
-                        {% else %}
-                            <span class="text-muted">No second device</span>
-                        {% endif %}
-                    </td>
-
                     <td class="text-end">
                         <div class="d-flex flex-wrap gap-2 justify-content-end">
                             <a href="{% url 'members:update' member.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
                             <a href="{% url 'members:detail' member.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
-
-                            {% if front_device %}
-                                <form method="post" action="{% url 'members:send_to_device' member.pk front_device.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-success">Send Front</button>
-                                </form>
-
-                                <form method="post" action="{% url 'members:check_device_status' member.pk front_device.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-info">Check Front</button>
-                                </form>
-                            {% endif %}
-
-                            {% if back_device %}
-                                <form method="post" action="{% url 'members:send_to_device' member.pk back_device.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-warning">Send Back</button>
-                                </form>
-
-                                <form method="post" action="{% url 'members:check_device_status' member.pk back_device.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-info">Check Back</button>
-                                </form>
-                            {% endif %}
-
-                            {% if front_device or back_device %}
-                                <form method="post" action="{% url 'members:send_to_both_devices' member.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn-sm btn-dark">Send Both</button>
-                                </form>
-                            {% endif %}
                         </div>
                     </td>
                 </tr>
+                {% if member.photo %}
+                    <div class="modal fade" id="photoModal{{ member.pk }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-lg">
+                            <div class="modal-content bg-dark border-light">
+                                <div class="modal-body text-center p-0">
+                                    <img src="{{ member.photo.url }}" alt="{{ member.full_name }}" class="img-fluid member-photo-modal">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+                </tr>
             {% empty %}
                 <tr>
-                    <td colspan="9" class="text-center text-muted">No members found.</td>
+                    <td colspan="8" class="text-center text-muted">No members found.</td>
                 </tr>
             {% endfor %}
         </tbody>
