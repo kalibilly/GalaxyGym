@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.apps import apps
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -37,7 +38,7 @@ class Member(TimeStampedModel, ActiveStatusModel):
         related_name='member_profile',
     )
     member_id = models.CharField(max_length=24, unique=True)
-    device_user_id = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    device_user_id = models.IntegerField(unique=True, null=True, blank=True, validators=[MinValueValidator(10)])
     full_name = models.CharField(max_length=150)
     phone_number = models.CharField(max_length=20, validators=[phone_regex])
     email = models.EmailField(blank=True)
@@ -57,6 +58,8 @@ class Member(TimeStampedModel, ActiveStatusModel):
         related_name='assigned_members',
     )
     wallet_balance = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    vehicle_number_permanent = models.CharField(max_length=40, blank=True)
+    vehicle_number_temporary = models.CharField(max_length=40, blank=True)
     address = models.TextField(blank=True)
     date_of_joining = models.DateField(default=timezone.now)
     status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
@@ -83,6 +86,52 @@ class Member(TimeStampedModel, ActiveStatusModel):
 
     def __str__(self):
         return f'{self.member_id} - {self.full_name}'
+
+    @classmethod
+    def format_member_id(cls, device_user_id):
+        if device_user_id is None:
+            return ''
+        return f'M{int(device_user_id):04d}'
+
+    @classmethod
+    def get_next_available_device_user_id(cls):
+        used_ids = set()
+        for value in cls.objects.exclude(device_user_id__isnull=True).values_list('device_user_id', flat=True):
+            if value is None:
+                continue
+            try:
+                numeric_value = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 10 <= numeric_value <= 1000:
+                used_ids.add(numeric_value)
+
+        for candidate in range(10, 1001):
+            if candidate not in used_ids:
+                return candidate
+        raise ValueError('No available device_user_id values remain in the supported range.')
+
+    def ensure_member_identifiers(self):
+        device_user_id = self.device_user_id
+        if device_user_id is None:
+            device_user_id = self.get_next_available_device_user_id()
+            self.device_user_id = device_user_id
+        else:
+            try:
+                device_user_id = int(device_user_id)
+            except (TypeError, ValueError):
+                raise ValueError('device_user_id must be an integer value.')
+            if not 10 <= device_user_id <= 1000:
+                raise ValueError('device_user_id must be between 10 and 1000.')
+            self.device_user_id = device_user_id
+
+        self.member_id = self.format_member_id(self.device_user_id)
+
+    def save(self, *args, **kwargs):
+        if self.device_user_id is None:
+            self.device_user_id = self.get_next_available_device_user_id()
+        self.ensure_member_identifiers()
+        super().save(*args, **kwargs)
 
     @property
     def active_membership(self):
