@@ -92,12 +92,12 @@
                         <thead class="table-light">
                             <tr>
                                 <th scope="col">Member</th>
-                                <th scope="col">Membership ID</th>
+                                <th scope="col">Entry Number</th>
                                 <th scope="col">Plan</th>
                                 <th scope="col">Start Date</th>
                                 <th scope="col">End Date</th>
                                 <th scope="col">Status</th>
-                                <th scope="col">Amount</th>
+                                <th scope="col">Total</th>
                                 <th scope="col" class="text-end">Actions</th>
                             </tr>
                         </thead>
@@ -116,7 +116,7 @@
                                             <small class="text-muted">Member ID: {{ membership.member.member_id }}</small>
                                         {% endif %}
                                     </td>
-                                    <td>{{ membership.membership_id|default:"—" }}</td>
+                                    <td>{{ membership.entry_number|default:"—" }}</td>
                                     <td>
                                         {% if membership.plan %}
                                             {{ membership.plan }}
@@ -142,10 +142,10 @@
                                         {% endwith %}
                                     </td>
                                     <td>
-                                        {% if membership.amount %}
-                                            {{ membership.amount }}
+                                        {% if membership.total_amount %}
+                                            {{ membership.total_amount }}
                                         {% else %}
-                                            — 
+                                            —
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
