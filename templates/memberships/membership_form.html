@@ -1,6 +1,11 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}{% if form.instance.pk %}Edit Membership{% else %}Create Membership{% endif %} - Galaxy Gym{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dark-theme.css' %}">
+{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -9,24 +14,51 @@
             <div class="card-body">
                 <h1 class="h4 mb-3">{% if form.instance.pk %}Edit Membership{% else %}Add Membership{% endif %}</h1>
                 <p class="text-white-50">Create or update a membership record for a member.</p>
-                <form method="post" novalidate>
+                <form method="post" novalidate id="membership-form">
                     {% csrf_token %}
                     {{ form.non_field_errors }}
                     <div class="row g-3">
                         {% for field in form %}
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} *{% endif %}</label>
-                                    {{ field }}
-                                    {% if field.help_text %}
-                                        <div class="form-text">{{ field.help_text }}</div>
-                                    {% endif %}
-                                    {% for error in field.errors %}
-                                        <div class="invalid-feedback d-block">{{ error }}</div>
-                                    {% endfor %}
+                            {% if field.name == 'member_lookup' or field.name == 'member_name' or field.name == 'member_phone' or field.name == 'member_joining' %}
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} *{% endif %}</label>
+                                        {{ field }}
+                                        {% if field.help_text %}
+                                            <div class="form-text">{{ field.help_text }}</div>
+                                        {% endif %}
+                                        {% for error in field.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
                                 </div>
-                            </div>
+                            {% elif field.name != 'member' and field.name != 'plan' %}
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} *{% endif %}</label>
+                                        {{ field }}
+                                        {% if field.help_text %}
+                                            <div class="form-text">{{ field.help_text }}</div>
+                                        {% endif %}
+                                        {% for error in field.errors %}
+                                            <div class="invalid-feedback d-block">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
                         {% endfor %}
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label" for="id_member">Member</label>
+                                {{ form.member }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label" for="id_plan">Membership Plan</label>
+                                {{ form.plan }}
+                            </div>
+                        </div>
                     </div>
                     <div class="mt-4 d-flex justify-content-between">
                         <a href="{% url 'memberships:list' %}" class="btn btn-link">Cancel</a>
@@ -37,4 +69,58 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const form = document.getElementById('membership-form');
+    if (!form) return;
+    const memberLookup = document.getElementById('id_member_lookup');
+    const planSelect = document.getElementById('id_plan');
+    const priceField = document.getElementById('id_price_before_discount');
+    const discountField = document.getElementById('id_discount_amount');
+    const totalField = document.getElementById('id_total_amount');
+    const memberInput = document.getElementById('id_member');
+    const memberNameField = document.getElementById('id_member_name');
+    const memberPhoneField = document.getElementById('id_member_phone');
+    const memberJoiningField = document.getElementById('id_member_joining');
+
+    function updateTotal() {
+        const price = parseFloat(priceField?.value || 0) || 0;
+        const discount = parseFloat(discountField?.value || 0) || 0;
+        const total = Math.max(price - discount, 0);
+        if (totalField) totalField.value = total.toFixed(2);
+    }
+
+    if (memberLookup) {
+        memberLookup.addEventListener('change', function () {
+            const value = this.value.trim();
+            if (!value) return;
+            fetch(`/memberships/lookup-member/?member_id=${encodeURIComponent(value)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.found) return;
+                    if (memberInput) memberInput.value = data.member_pk;
+                    if (memberNameField) memberNameField.value = data.name;
+                    if (memberPhoneField) memberPhoneField.value = data.phone;
+                    if (memberJoiningField) memberJoiningField.value = data.joining_date;
+                });
+        });
+    }
+
+    if (planSelect) {
+        planSelect.addEventListener('change', function () {
+            const selectedOption = this.options[this.selectedIndex];
+            const rawPrice = selectedOption?.dataset.price || '';
+            if (priceField) priceField.value = rawPrice;
+            updateTotal();
+        });
+    }
+
+    if (discountField) discountField.addEventListener('input', updateTotal);
+    if (priceField) priceField.addEventListener('input', updateTotal);
+    updateTotal();
+})();
+</script>
 {% endblock %}
