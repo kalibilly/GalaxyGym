@@ -65,7 +65,7 @@ class MemberListView(LoginRequiredMixin, ListView):
                 | Q(phone_number__icontains=query)
                 | Q(email__icontains=query)
                 | Q(emergency_contact_name__icontains=query)
-                | Q(device_user_id__icontains=query)
+                | Q(device_user_id__exact=query)
             )
 
         if status:
@@ -111,6 +111,14 @@ class MemberCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
     template_name = 'members/member_form.html'
     success_url = reverse_lazy('members:list')
     success_message = 'Member profile created successfully.'
+
+    def get_initial(self):
+        initial = super().get_initial()
+        if not self.request.POST:
+            next_device_user_id = Member.get_next_available_device_user_id()
+            initial['device_user_id'] = next_device_user_id
+            initial['member_id'] = Member.format_member_id(next_device_user_id)
+        return initial
 
     def form_valid(self, form):
         self.object = form.save(commit=False)
