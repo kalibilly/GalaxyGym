@@ -1,4 +1,4 @@
-from django.db import migrations, models
+from django.db import migrations
 
 
 class Migration(migrations.Migration):
@@ -8,19 +8,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='biometricdevice',
-            name='firmware_version',
-            field=models.CharField(blank=True, max_length=64),
-        ),
-        migrations.AddField(
-            model_name='biometricdevice',
-            name='last_sync_at',
-            field=models.DateTimeField(blank=True, null=True),
-        ),
-        migrations.AddField(
-            model_name='biometricdevice',
-            name='last_known_ip',
-            field=models.CharField(blank=True, max_length=45),
-        ),
+        migrations.RunPython(migrations.RunPython.noop, migrations.RunPython.noop),
     ]
