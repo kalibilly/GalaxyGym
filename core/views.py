@@ -5,6 +5,7 @@ from django.views.generic import TemplateView
 from django.urls import reverse_lazy
 from accounts.permissions import RoleRequiredMixin
 from accounts.models import UserAccount
+from members.models import Member
 from .services import get_dashboard_metrics
 
 
@@ -43,6 +44,27 @@ class HomeView(TemplateView):
             context['pending_payment_alert'] = member_profile.needs_pending_payment_warning() if member_profile else False
             context['downgrade_warning'] = member_profile.should_warn_downgrade() if member_profile else False
             context['downgrade_plan'] = member_profile.suggested_downgrade_plan() if member_profile else None
+
+        context['membership_records'] = []
+        context['member_vehicle_records'] = []
+        if self.request.user.is_authenticated:
+            members = Member.objects.select_related('assigned_staff').prefetch_related('memberships__plan').order_by('member_id')[:8]
+            context['membership_records'] = [
+                {
+                    'member': member,
+                    'history': member.memberships.select_related('plan').order_by('-start_date'),
+                }
+                for member in members
+            ]
+            context['member_vehicle_records'] = [
+                {
+                    'member': member,
+                    'vehicle_number': member.vehicle_number_permanent or member.vehicle_number_temporary or '—',
+                    'vehicle_type': 'Permanent' if member.vehicle_number_permanent else 'Temporary' if member.vehicle_number_temporary else 'None',
+                }
+                for member in members
+                if member.vehicle_number_permanent or member.vehicle_number_temporary
+            ]
 
         return context
 
