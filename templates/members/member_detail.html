@@ -118,6 +118,12 @@
                     <dt class="col-sm-4">Address</dt>
                     <dd class="col-sm-8">{{ member.address|linebreaksbr|default:"No address provided." }}</dd>
 
+                    <dt class="col-sm-4">Permanent Vehicle</dt>
+                    <dd class="col-sm-8">{{ member.vehicle_number_permanent|default:"—" }}</dd>
+
+                    <dt class="col-sm-4">Temporary Vehicle</dt>
+                    <dd class="col-sm-8">{{ member.vehicle_number_temporary|default:"—" }}</dd>
+
                     <dt class="col-sm-4">Notes</dt>
                     <dd class="col-sm-8">{{ member.notes|linebreaksbr|default:"No notes available." }}</dd>
                 </dl>
@@ -484,7 +490,7 @@
     <div class="col-lg-4">
         {% if member.photo %}
             <div class="card mb-3">
-                <img src="{{ member.photo.url }}" class="card-img-top" alt="{{ member.full_name }}">
+                <img src="{{ member.photo.url }}" class="card-img-top member-photo-detail" alt="{{ member.full_name }}">
             </div>
         {% endif %}
     </div>
