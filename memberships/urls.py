@@ -5,6 +5,7 @@ from . import views
 app_name = 'memberships'
 
 urlpatterns = [
+    path('lookup-member/', views.membership_lookup_member, name='lookup_member'),
     path('plans/', views.MembershipPlanListView.as_view(), name='plan_list'),
     path('plans/create/', views.MembershipPlanCreateView.as_view(), name='plan_create'),
     path('plans/<int:pk>/', views.MembershipPlanDetailView.as_view(), name='plan_detail'),
