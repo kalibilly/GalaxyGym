@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
-from django.db import Q
+from django.db.models import Q
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
@@ -68,7 +68,7 @@ class StaffCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
         self.object.save()
         form.save_m2m()
 
-        # Fetch all active biometric devices (since both MB20 and AiFace are on eBioServer)
+        # Fetch all active biometric devices
         devices = BiometricDevice.objects.filter(is_active=True)
         for device in devices:
             service = BiometricSyncService(device)
