@@ -1,6 +1,11 @@
 body {
-    background-color: #080e1c;
-    color: #e9ecef;
+    background-color: #000000;
+    color: #f8fafc;
+    padding-top: 76px;
+}
+
+.page-shell {
+    padding-top: 1rem;
 }
 
 .navbar, .card-dark, .sidebar {
@@ -9,8 +14,9 @@ body {
 }
 
 .card {
-    background-color: #111a32;
+    background-color: #0b0f16;
     border: 1px solid rgba(255,255,255,0.08);
+    color: #f8fafc;
 }
 
 .card .card-header, .card .card-footer {
@@ -50,7 +56,7 @@ body {
 }
 
 /* Improve contrast for form labels in dark theme: make labels white */
-form label, .form-label {
+form label, .form-label, h1, h2, h3, h4, h5, h6, p, span, td, th, dd, dt, li, a {
     color: #ffffff !important;
 }
 
@@ -63,6 +69,29 @@ form label, .form-label {
 
 .table {
     color: #f8f9fa;
+    background-color: #000000;
+}
+
+.member-photo-thumb {
+    width: 54px;
+    height: 54px;
+    object-fit: cover;
+    cursor: pointer;
+}
+
+.member-photo-detail {
+    max-height: 320px;
+    object-fit: cover;
+}
+
+.member-photo-modal {
+    max-height: 72vh;
+    object-fit: contain;
+    width: 100%;
+}
+
+#membership-records, #member-vehicles {
+    scroll-margin-top: 90px;
 }
 
 .table th, .table td {
