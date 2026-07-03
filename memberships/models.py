@@ -135,6 +135,7 @@ class Membership(TimeStampedModel):
     ]
 
     serial_number = models.CharField(max_length=32, unique=True, null=True, blank=True)
+    entry_number = models.CharField(max_length=32, unique=True, null=True, blank=True)
     member = models.ForeignKey(
         'members.Member',
         on_delete=models.CASCADE,
@@ -147,9 +148,9 @@ class Membership(TimeStampedModel):
     )
     start_date = models.DateField()
     end_date = models.DateField()
-    membership_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    price_before_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    final_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     payment_status = models.CharField(
         max_length=20,
         choices=PAYMENT_STATUS_CHOICES,
@@ -188,15 +189,23 @@ class Membership(TimeStampedModel):
         next_number = int(match.group(1)) + 1
         return f'{prefix}{next_number:04d}'
 
+    @property
+    def membership_amount(self):
+        return self.price_before_discount
+
+    @property
+    def final_amount(self):
+        return self.total_amount
+
     def clean(self):
         if self.end_date < self.start_date:
             raise ValidationError('End date must be on or after start date.')
-        if self.membership_amount < 0:
-            raise ValidationError({'membership_amount': 'Membership amount cannot be negative.'})
+        if self.price_before_discount < 0:
+            raise ValidationError({'price_before_discount': 'Price before discount cannot be negative.'})
         if self.discount_amount < 0:
             raise ValidationError({'discount_amount': 'Discount cannot be negative.'})
-        if self.discount_amount > self.membership_amount:
-            raise ValidationError({'discount_amount': 'Discount cannot be greater than membership amount.'})
+        if self.discount_amount > self.price_before_discount:
+            raise ValidationError({'discount_amount': 'Discount cannot be greater than the base price.'})
 
     def derive_status(self):
         if self.status in {self.STATUS_FROZEN, self.STATUS_CANCELLED}:
@@ -214,7 +223,9 @@ class Membership(TimeStampedModel):
     def save(self, *args, **kwargs):
         if not self.serial_number:
             self.serial_number = self.get_next_serial_number()
-        self.final_amount = self.membership_amount - self.discount_amount
+        if not self.entry_number:
+            self.entry_number = self.serial_number
+        self.total_amount = self.price_before_discount - self.discount_amount
         old_status = None
         if self.pk:
             try:
