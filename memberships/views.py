@@ -2,11 +2,14 @@ from datetime import timedelta
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
+from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
+
+from members.models import Member
 
 from .forms import MembershipForm, MembershipPlanForm
 from .models import Membership, MembershipPlan
@@ -98,8 +101,18 @@ class MembershipCreateView(LoginRequiredMixin, CreateView):
 
         if member_id:
             initial['member'] = member_id
+            member = Member.objects.filter(pk=member_id).first()
+            if member:
+                initial['member_lookup'] = member.member_id
+                initial['member_name'] = member.full_name
+                initial['member_phone'] = member.phone_number
+                initial['member_joining'] = member.date_of_joining
         if plan_id:
             initial['plan'] = plan_id
+            plan = MembershipPlan.objects.filter(pk=plan_id).first()
+            if plan:
+                initial['price_before_discount'] = plan.price
+                initial['total_amount'] = plan.price
         if renewed_from:
             source_membership = Membership.objects.select_related('plan').filter(pk=renewed_from).first()
             if source_membership:
@@ -108,8 +121,9 @@ class MembershipCreateView(LoginRequiredMixin, CreateView):
                 initial['plan'] = source_membership.plan_id
                 initial['start_date'] = next_start_date
                 initial['end_date'] = next_start_date + timedelta(days=source_membership.plan.duration_days)
-                initial['membership_amount'] = source_membership.membership_amount
+                initial['price_before_discount'] = source_membership.price_before_discount
                 initial['discount_amount'] = source_membership.discount_amount
+                initial['total_amount'] = source_membership.total_amount
                 initial['payment_status'] = Membership.PAYMENT_STATUS_UNPAID
                 initial['renewed_from'] = source_membership.pk
         return initial
@@ -145,3 +159,22 @@ class MembershipDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context['can_renew'] = self.object.needs_renewal_action
         return context
+
+
+def membership_lookup_member(request):
+    member_id = request.GET.get('member_id', '').strip()
+    if not member_id:
+        return JsonResponse({'found': False})
+
+    member = Member.objects.filter(member_id=member_id).first() or Member.objects.filter(pk=member_id).first()
+    if not member:
+        return JsonResponse({'found': False})
+
+    return JsonResponse({
+        'found': True,
+        'member_id': member.member_id,
+        'name': member.full_name,
+        'phone': member.phone_number,
+        'joining_date': member.date_of_joining.strftime('%Y-%m-%d') if member.date_of_joining else '',
+        'member_pk': member.pk,
+    })
