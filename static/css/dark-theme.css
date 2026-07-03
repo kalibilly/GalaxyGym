@@ -8,20 +8,21 @@ body {
     padding-top: 1rem;
 }
 
-.navbar, .card-dark, .sidebar {
-    background-color: #0d1323 !important;
+.navbar, .sidebar {
+    background-color: #000000 !important;
     color: #f8f9fa !important;
 }
 
-.card {
-    background-color: #0b0f16;
-    border: 1px solid rgba(255,255,255,0.08);
+/* Force all cards and dashboard components to solid black background */
+.card, .card-body, .card-dark {
+    background-color: #000000 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: #f8fafc;
 }
 
 .card .card-header, .card .card-footer {
-    background-color: #0d1323;
-    border-color: rgba(255,255,255,0.08);
+    background-color: #000000 !important;
+    border-color: rgba(255, 255, 255, 0.08);
 }
 
 .btn-primary {
@@ -31,12 +32,12 @@ body {
 
 .btn-outline-light {
     color: #f8f9fa;
-    border-color: rgba(248,249,250,0.4);
+    border-color: rgba(248, 249, 250, 0.4);
 }
 
 .btn-outline-light:hover {
     color: #fff;
-    background-color: rgba(248,249,250,0.08);
+    background-color: rgba(248, 249, 250, 0.08);
 }
 
 .home-hero {
@@ -50,9 +51,9 @@ body {
 }
 
 .form-control, .form-select {
-    background-color: #0d1323;
+    background-color: #000000;
     color: #f8f9fa;
-    border-color: rgba(255,255,255,0.12);
+    border-color: rgba(255, 255, 255, 0.12);
 }
 
 /* Improve contrast for form labels in dark theme: make labels white */
@@ -61,15 +62,28 @@ form label, .form-label, h1, h2, h3, h4, h5, h6, p, span, td, th, dd, dt, li, a 
 }
 
 .form-control:focus, .form-select:focus {
-    background-color: #0d1323;
+    background-color: #000000;
     color: #f8f9fa;
     border-color: #0d6efd;
     box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
-.table {
-    color: #f8f9fa;
-    background-color: #000000;
+/* CRITICAL FIX: Force all Bootstrap tables, headers, and rows to solid black background */
+.table, 
+.table-responsive,
+.table > thead, 
+.table > tbody, 
+.table > tfoot, 
+.table > tr, 
+.table > tr > th, 
+.table > tr > td,
+.table th, 
+.table td {
+    background-color: #000000 !important;
+    --bs-table-bg: #000000 !important;
+    --bs-table-hover-bg: #111111 !important;
+    color: #f8f9fa !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 .member-photo-thumb {
@@ -94,12 +108,9 @@ form label, .form-label, h1, h2, h3, h4, h5, h6, p, span, td, th, dd, dt, li, a 
     scroll-margin-top: 90px;
 }
 
-.table th, .table td {
-    border-color: rgba(255,255,255,0.08);
-}
-
-.bg-dark, .bg-secondary, .bg-body-secondary {
-    background-color: #0d1323 !important;
+/* Force clean black background elements for global containers */
+.bg-dark, .bg-secondary, .bg-body-secondary, .table-responsive {
+    background-color: #000000 !important;
 }
 
 .text-muted {
@@ -107,6 +118,6 @@ form label, .form-label, h1, h2, h3, h4, h5, h6, p, span, td, th, dd, dt, li, a 
 }
 
 .footer-dark {
-    background-color: #0b101e;
-    border-top: 1px solid rgba(255,255,255,0.08);
+    background-color: #000000;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
