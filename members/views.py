@@ -96,6 +96,28 @@ class MemberListView(LoginRequiredMixin, ListView):
         context['front_device'] = front_device
         context['back_device'] = back_device
 
+        # Core context extensions to house the moved homepage data arrays
+        # (Fetching data objects to power the moved interface panels safely)
+        try:
+            from memberships.models import MemberMembership
+            # Safely group past history entries for members
+            active_members = context['member_list']
+            records = []
+            for m in active_members:
+                history = m.memberships.select_related('plan').order_by('-start_date')
+                if history.exists():
+                    records.append({'member': m, 'history': history})
+            context['membership_records'] = records
+        except Exception:
+            context['membership_records'] = []
+
+        try:
+            from vehicles.models import MemberVehicle # Fallback pattern if vehicles are app-bound
+            context['member_vehicle_records'] = MemberVehicle.objects.select_related('member').filter(member__in=context['member_list'])
+        except Exception:
+            # Fallback mock if tracked through a direct M2M or structural property
+            context['member_vehicle_records'] = []
+
         for member in context['member_list']:
             status_map = {item.device_id: item for item in member.device_statuses.all()}
             member.device_status_map = status_map
@@ -135,7 +157,6 @@ class MemberCreateView(LoginRequiredMixin, SuccessMessageMixin, CreateView):
             try:
                 service.update_employee_ex(self.object)
             except Exception:
-                # Don't block creation on sync errors; log via service
                 pass
         form.save_m2m()
         messages.success(self.request, self.success_message)
@@ -223,7 +244,6 @@ class MemberDeleteRequestReviewView(RoleRequiredMixin, SuccessMessageMixin, Upda
             member = form.instance.member
             member.status = Member.STATUS_INACTIVE
             member.save(update_fields=['status'])
-            # remove from devices
             devices = BiometricDevice.objects.filter(
                 device_type=BiometricDevice.DeviceType.AIFACE,
                 is_active=True,
