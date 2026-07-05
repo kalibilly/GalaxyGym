@@ -27,38 +27,7 @@
 
         <div class="row g-4">
             <div class="col-lg-4">
-                <div class="card card-dark">
-                    <div class="card-header bg-primary">
-                        <h5 class="mb-0 text-white">Account Summary</h5>
-                    </div>
-                    <div class="card-body">
-                        <dl class="row">
-                            <dt class="col-sm-5">Full Name:</dt>
-                            <dd class="col-sm-7">{{ user.full_name|default:user.login_id }}</dd>
-                            <dt class="col-sm-5">Role:</dt>
-                            <dd class="col-sm-7">{{ user.get_role_display }}</dd>
-                            {% if gym_id %}
-                                <dt class="col-sm-5">Gym ID:</dt>
-                                <dd class="col-sm-7">{{ gym_id }}</dd>
-                            {% endif %}
-                            {% if staff_profile %}
-                                <dt class="col-sm-5">Department:</dt>
-                                <dd class="col-sm-7">{{ staff_profile.department.name|default:'N/A' }}</dd>
-                                <dt class="col-sm-5">Position:</dt>
-                                <dd class="col-sm-7">{{ staff_profile.designation|default:'N/A' }}</dd>
-                            {% endif %}
-                            {% if membership_summary %}
-                                <dt class="col-sm-5">Membership:</dt>
-                                <dd class="col-sm-7">{{ membership_summary.plan }}</dd>
-                                <dt class="col-sm-5">Expires:</dt>
-                                <dd class="col-sm-7">{{ membership_summary.expiry_date }}</dd>
-                            {% endif %}
-                            <dt class="col-sm-5">Wallet:</dt>
-                            <dd class="col-sm-7">₹{{ wallet_balance }}</dd>
-                        </dl>
-                    </div>
                 </div>
-            </div>
 
             <div class="col-lg-8">
                 <div class="row g-4">
