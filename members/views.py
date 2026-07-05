@@ -44,11 +44,13 @@ class MemberListView(LoginRequiredMixin, ListView):
             .order_by('device__device_name', 'device__serial_number')
         )
 
+        # Optimize context execution via aggressive prefetches to power the single matrix row layout
         queryset = (
             super()
             .get_queryset()
             .select_related('assigned_staff')
             .prefetch_related(
+                'memberships__plan',
                 Prefetch('device_statuses', queryset=device_status_queryset)
             )
             .order_by('member_id')
@@ -64,8 +66,8 @@ class MemberListView(LoginRequiredMixin, ListView):
                 | Q(full_name__icontains=query)
                 | Q(phone_number__icontains=query)
                 | Q(email__icontains=query)
-                | Q(emergency_contact_name__icontains=query)
-                | Q(device_user_id__exact=query)
+                | Q(vehicle_number_permanent__icontains=query)
+                | Q(vehicle_number_temporary__icontains=query)
             )
 
         if status:
@@ -95,28 +97,6 @@ class MemberListView(LoginRequiredMixin, ListView):
         context['biometric_devices'] = devices
         context['front_device'] = front_device
         context['back_device'] = back_device
-
-        # Core context extensions to house the moved homepage data arrays
-        # (Fetching data objects to power the moved interface panels safely)
-        try:
-            from memberships.models import MemberMembership
-            # Safely group past history entries for members
-            active_members = context['member_list']
-            records = []
-            for m in active_members:
-                history = m.memberships.select_related('plan').order_by('-start_date')
-                if history.exists():
-                    records.append({'member': m, 'history': history})
-            context['membership_records'] = records
-        except Exception:
-            context['membership_records'] = []
-
-        try:
-            from vehicles.models import MemberVehicle # Fallback pattern if vehicles are app-bound
-            context['member_vehicle_records'] = MemberVehicle.objects.select_related('member').filter(member__in=context['member_list'])
-        except Exception:
-            # Fallback mock if tracked through a direct M2M or structural property
-            context['member_vehicle_records'] = []
 
         for member in context['member_list']:
             status_map = {item.device_id: item for item in member.device_statuses.all()}
@@ -284,7 +264,7 @@ class MemberDetailView(LoginRequiredMixin, DetailView):
         status_map = {item.device_id: item for item in device_statuses}
 
         context['active_membership'] = member.active_membership
-        context['recent_memberships'] = member.memberships.order_by('-start_date')[:5]
+        context['recent_memberships'] = member.memberships.order_by('-start_date')
         context['latest_invoice'] = member.invoices.order_by('-invoice_date').first()
         context['open_invoices'] = member.invoices.filter(
             status__in=[
