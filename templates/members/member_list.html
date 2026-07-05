@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 
-{% block title %}Members - Galaxy Gym{% endblock %}
+{% block title %}Members Registry - Galaxy Gym{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
-        <h1 class="h4 mb-0">Members</h1>
-        <p class="text-muted mb-0">Track membership profiles, assigned staff, and biometric device sync status.</p>
+        <h1 class="h4 mb-0">Members Registry</h1>
+        <p class="text-muted mb-0">Consolidated master roster tracking registrations, active memberships, fees, and vehicles.</p>
     </div>
     <a href="{% url 'members:create' %}" class="btn btn-primary">Add Member</a>
 </div>
@@ -18,7 +18,7 @@
             name="q"
             value="{{ q }}"
             class="form-control"
-            placeholder="Search member ID, device ID, name, phone, email..."
+            placeholder="Search member ID, name, phone, or vehicle..."
         >
     </div>
     <div class="col-sm-3">
@@ -44,20 +44,27 @@
     </div>
 </form>
 
-<div class="card card-dark mb-5">
+<div class="card card-dark mb-4">
     <div class="card-header bg-dark">
-        <h5 class="mb-0 text-white">All Members Registry</h5>
+        <h5 class="mb-0 text-white">Master Directory</h5>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-dark table-hover align-middle mb-0">
+            <table class="table table-dark table-hover align-middle mb-0" style="font-size: 0.9rem;">
                 <thead>
                     <tr>
                         <th>S.No.</th>
-                        <th>Member ID</th>
-                        <th>Name</th>
+                        <th>Name / IDs</th>
                         <th>Phone</th>
-                        <th>Assigned Staff</th>
+                        <th>Joining Date</th>
+                        <th>Plan</th>
+                        <th>Start Date</th>
+                        <th>End Date</th>
+                        <th>Memb. Amount</th>
+                        <th>Paid Amount</th>
+                        <th>Remarks</th>
+                        <th>Vehicle Type</th>
+                        <th>Vehicle No.</th>
                         <th>Status</th>
                         <th>Photo</th>
                         <th class="text-end">Actions</th>
@@ -66,19 +73,59 @@
                 <tbody>
                     {% for member in member_list %}
                         <tr>
-                            <td>{{ forloop.counter }}</td>
-                            <td>{{ member.member_id }}</td>
+                            <td>{{ forloop.counter|add:page_obj.start_index|add:"-1" }}</td>
                             <td>
-                                <a href="{% url 'members:detail' member.pk %}">{{ member.full_name }}</a>
+                                <strong class="text-white d-block">{{ member.full_name }}</strong>
+                                <span class="text-muted d-block" style="font-size: 0.8rem;">ID: {{ member.member_id }}</span>
+                                <span class="text-info d-block" style="font-size: 0.8rem;">Device ID: {{ member.device_user_id|default:"—" }}</span>
                             </td>
                             <td>{{ member.phone_number }}</td>
+                            <td>{{ member.date_of_joining|date:"Y-m-d" }}</td>
+                            
                             <td>
-                                {% if member.assigned_staff %}
-                                    {{ member.assigned_staff.full_name }}
+                                {% if member.active_membership %}
+                                    <span class="text-info font-weight-bold">{{ member.active_membership.plan.name }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ member.active_membership.start_date|date:"Y-m-d"|default:"—" }}</td>
+                            <td>{{ member.active_membership.end_date|date:"Y-m-d"|default:"—" }}</td>
+                            <td>
+                                {% if member.active_membership %}
+                                    ₹{{ member.active_membership.total_amount|default:member.active_membership.final_amount }}
                                 {% else %}
                                     —
                                 {% endif %}
                             </td>
+                            <td>
+                                {% if member.active_membership %}
+                                    ₹{{ member.active_membership.paid_amount|default:"0.00" }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="text-wrap d-inline-block" style="max-width: 120px;">
+                                    {{ member.active_membership.remarks|default:member.notes|default:"—" }}
+                                </span>
+                            </td>
+
+                            <td>
+                                {% if member.vehicle_number_permanent %}
+                                    <span class="badge bg-primary">Permanent</span>
+                                {% elif member.vehicle_number_temporary %}
+                                    <span class="badge bg-warning text-dark">Temporary</span>
+                                {% else %}
+                                    <span class="text-muted">None</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <code class="text-light">
+                                    {{ member.vehicle_number_permanent|default:member.vehicle_number_temporary|default:"—" }}
+                                </code>
+                            </td>
+
                             <td>
                                 {% if member.status == 'active' %}
                                     <span class="badge bg-success">{{ member.get_status_display }}</span>
@@ -90,24 +137,26 @@
                             </td>
                             <td>
                                 {% if member.photo %}
-                                    <img src="{{ member.photo.url }}" alt="{{ member.full_name }}" class="img-thumbnail member-photo-thumb" data-bs-toggle="modal" data-bs-target="#photoModal{{ member.pk }}" style="max-height: 40px; cursor: pointer;">
+                                    <img src="{{ member.photo.url }}" alt="{{ member.full_name }}" class="img-thumbnail rounded" data-bs-toggle="modal" data-bs-target="#photoModal{{ member.pk }}" style="max-height: 40px; max-width: 40px; cursor: pointer;">
                                 {% else %}
                                     <span class="text-muted">No photo</span>
                                 {% endif %}
                             </td>
+                            
                             <td class="text-end">
-                                <div class="d-flex flex-wrap gap-2 justify-content-end">
-                                    <a href="{% url 'members:update' member.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
-                                    <a href="{% url 'members:detail' member.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+                                <div class="d-flex gap-1 justify-content-end">
+                                    <a href="{% url 'members:update' member.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2">Edit</a>
+                                    <a href="{% url 'members:detail' member.pk %}" class="btn btn-sm btn-outline-secondary py-0 px-2">View</a>
                                 </div>
                             </td>
                         </tr>
+
                         {% if member.photo %}
                             <div class="modal fade" id="photoModal{{ member.pk }}" tabindex="-1" aria-hidden="true">
-                                <div class="modal-dialog modal-dialog-centered modal-lg">
+                                <div class="modal-dialog modal-dialog-centered">
                                     <div class="modal-content bg-dark border-light">
-                                        <div class="modal-body text-center p-0">
-                                            <img src="{{ member.photo.url }}" alt="{{ member.full_name }}" class="img-fluid member-photo-modal">
+                                        <div class="modal-body text-center p-2">
+                                            <img src="{{ member.photo.url }}" alt="{{ member.full_name }}" class="img-fluid rounded">
                                         </div>
                                     </div>
                                 </div>
@@ -115,7 +164,7 @@
                         {% endif %}
                     {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center text-muted">No members found.</td>
+                            <td colspan="15" class="text-center text-muted py-4">No records match the active search filters.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -125,23 +174,23 @@
 </div>
 
 {% if is_paginated %}
-<nav aria-label="Member pagination" class="mb-5">
+<nav aria-label="Member database navigation" class="mt-3">
     <ul class="pagination justify-content-center">
         {% if page_obj.has_previous %}
             <li class="page-item">
-                <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if staff_id %}staff={{ staff_id }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+                <a class="page-link shadow-none" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if staff_id %}staff={{ staff_id }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
             </li>
         {% else %}
             <li class="page-item disabled"><span class="page-link">Previous</span></li>
         {% endif %}
 
         <li class="page-item disabled">
-            <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            <span class="page-link text-white">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
         </li>
 
         {% if page_obj.has_next %}
             <li class="page-item">
-                <a class="page-link" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if staff_id %}staff={{ staff_id }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+                <a class="page-link shadow-none" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if staff_id %}staff={{ staff_id }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
             </li>
         {% else %}
             <li class="page-item disabled"><span class="page-link">Next</span></li>
@@ -149,117 +198,4 @@
     </ul>
 </nav>
 {% endif %}
-
-<!-- Relocated Sections from Home Page Layout -->
-<hr class="border-secondary my-5">
-
-<div class="row g-4">
-    <div class="col-12" id="membership-records">
-        <div class="card card-dark">
-            <div class="card-header bg-dark">
-                <h5 class="mb-0 text-white">Membership Record</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>Member</th>
-                                <th>Phone</th>
-                                <th>Status</th>
-                                <th>History</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in membership_records %}
-                                <tr>
-                                    <td>{{ item.member.full_name }}</td>
-                                    <td>{{ item.member.phone_number }}</td>
-                                    <td>{{ item.member.get_status_display }}</td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="collapse" data-bs-target="#history-{{ item.member.pk }}">View</button>
-                                    </td>
-                                </tr>
-                                <tr class="collapse" id="history-{{ item.member.pk }}">
-                                    <td colspan="4">
-                                        <div class="p-3 rounded bg-black">
-                                            <table class="table table-sm table-dark mb-0">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Plan</th>
-                                                        <th>Entry</th>
-                                                        <th>Start</th>
-                                                        <th>End</th>
-                                                        <th>Total</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {% for membership in item.history %}
-                                                        <tr>
-                                                            <td>{{ membership.plan.name }}</td>
-                                                            <td>{{ membership.entry_number|default:'—' }}</td>
-                                                            <td>{{ membership.start_date }}</td>
-                                                            <td>{{ membership.end_date }}</td>
-                                                            <td>{{ membership.total_amount }}</td>
-                                                        </tr>
-                                                    {% empty %}
-                                                        <tr><td colspan="5">No membership history.</td></tr>
-                                                    {% endfor %}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </td>
-                                </tr>
-                            {% empty %}
-                                <tr><td colspan="4">No membership records to display.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-12" id="member-vehicles">
-        <div class="card card-dark">
-            <div class="card-header bg-dark">
-                <h5 class="mb-0 text-white">Members Vehicle</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>S.No.</th>
-                                <th>Member Name</th>
-                                <th>Member Phone</th>
-                                <th>Vehicle Number</th>
-                                <th>Profile Photo</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in member_vehicle_records %}
-                                <tr>
-                                    <td>{{ forloop.counter }}</td>
-                                    <td>{{ item.member.full_name }}</td>
-                                    <td>{{ item.member.phone_number }}</td>
-                                    <td>{{ item.vehicle_type }}: {{ item.vehicle_number }}</td>
-                                    <td>
-                                        {% if item.member.photo %}
-                                            <img src="{{ item.member.photo.url }}" alt="{{ item.member.full_name }}" style="max-height: 40px;" class="member-photo-thumb">
-                                        {% else %}
-                                            <span class="text-muted">No photo</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                            {% empty %}
-                                <tr><td colspan="5">No vehicles tracked.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
