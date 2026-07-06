@@ -6,6 +6,7 @@ from django.urls import reverse_lazy
 from accounts.permissions import RoleRequiredMixin
 from accounts.models import UserAccount
 from members.models import Member
+from memberships.models import MembershipPlan  # Imported to fetch gym membership plans
 from .services import get_dashboard_metrics
 
 
@@ -29,6 +30,9 @@ class HomeView(TemplateView):
                 'image10.jpeg',
             ],
         })
+
+        # Fetch active membership plans to utilize the empty left column
+        context['membership_plans'] = MembershipPlan.objects.filter(is_active=True).order_by('price')
 
         if self.request.user.is_authenticated:
             member_profile = getattr(self.request.user, 'member_profile', None)
@@ -136,4 +140,3 @@ class OwnerDashboardView(RoleRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context['role_display'] = self.request.user.get_role_display()
         return context
-
