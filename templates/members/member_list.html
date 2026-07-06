@@ -5,7 +5,7 @@
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
-        <h1 class="h4 mb-0">Members Registry</h1>
+        <h1 class="h4 mb-0">Members Records</h1>
         <p class="text-muted mb-0">Consolidated master roster tracking registrations, active memberships, fees, and vehicles.</p>
     </div>
     <a href="{% url 'members:create' %}" class="btn btn-primary">Add Member</a>
@@ -55,9 +55,10 @@
                     <tr>
                         <th>S.No.</th>
                         <th>Name / IDs</th>
+                        <th>Entry No.</th>
                         <th>Phone</th>
-                        <th>Joining Date</th>
                         <th>Plan</th>
+                        <th>Joining Date</th>
                         <th>Start Date</th>
                         <th>End Date</th>
                         <th>Memb. Amount</th>
@@ -79,8 +80,8 @@
                                 <span class="text-muted d-block" style="font-size: 0.8rem;">ID: {{ member.member_id }}</span>
                                 <span class="text-info d-block" style="font-size: 0.8rem;">Device ID: {{ member.device_user_id|default:"—" }}</span>
                             </td>
+                            <td><span class="badge bg-secondary font-monospace">{{ member.member_id }}</span></td>
                             <td>{{ member.phone_number }}</td>
-                            <td>{{ member.date_of_joining|date:"Y-m-d" }}</td>
                             
                             <td>
                                 {% if member.active_membership %}
@@ -89,6 +90,9 @@
                                     <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
+                            
+                            <td>{{ member.date_of_joining|date:"Y-m-d" }}</td>
+                            
                             <td>{{ member.active_membership.start_date|date:"Y-m-d"|default:"—" }}</td>
                             <td>{{ member.active_membership.end_date|date:"Y-m-d"|default:"—" }}</td>
                             <td>
@@ -164,7 +168,7 @@
                         {% endif %}
                     {% empty %}
                         <tr>
-                            <td colspan="15" class="text-center text-muted py-4">No records match the active search filters.</td>
+                            <td colspan="16" class="text-center text-muted py-4">No records match the active search filters.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
