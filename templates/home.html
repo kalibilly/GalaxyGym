@@ -4,7 +4,7 @@
 {% block title %}Galaxy Gym | Premium Gym Experience{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href=\"{% static 'css/home-page.css' %}\">
+<link rel="stylesheet" href="{% static 'css/home-page.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -20,8 +20,8 @@
                 </div>
             </div>
             <div class="col-lg-4 text-lg-end">
-                <a href=\"{% url 'dashboard' %}\" class="btn btn-outline-light mb-2">Go to Dashboard</a>
-                <a href=\"{% url 'profile' %}\" class="btn btn-primary mb-2">Profile</a>
+                <a href="{% url 'dashboard' %}" class="btn btn-outline-light mb-2">Go to Dashboard</a>
+                <a href="{% url 'profile' %}" class="btn btn-primary mb-2">Profile</a>
             </div>
         </div>
 
@@ -30,7 +30,7 @@
                 <div class="card card-dark h-100">
                     <div class="card-header bg-dark d-flex justify-content-between align-items-center">
                         <h5 class="mb-0 text-white">Gym Membership Plans</h5>
-                        <a href=\"{% url 'memberships:plan_list' %}\" class="text-primary text-decoration-none small">View All</a>
+                        <a href="{% url 'memberships:plan_list' %}" class="text-primary text-decoration-none small">View All</a>
                     </div>
                     <div class="card-body" style="max-height: 480px; overflow-y: auto;">
                         {% if membership_plans %}
@@ -50,7 +50,7 @@
                         {% else %}
                             <p class="text-muted text-center py-4 my-0">No plans configured yet.</p>
                             <div class="text-center">
-                                <a href=\"{% url 'memberships:plan_create' %}\" class="btn btn-sm btn-outline-primary">Create First Plan</a>
+                                <a href="{% url 'memberships:plan_create' %}" class="btn btn-sm btn-outline-primary">Create First Plan</a>
                             </div>
                         {% endif %}
                     </div>
@@ -65,31 +65,31 @@
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-6 col-md-4">
-                                <a href=\"{% url 'members:create' %}\" class="btn btn-outline-light w-100 py-3 text-center d-flex flex-column align-items-center justify-content-center h-100">
+                                <a href="{% url 'members:create' %}" class="btn btn-outline-light w-100 py-3 text-center d-flex flex-column align-items-center justify-content-center h-100">
                                     <i class="bi bi-person-plus mb-2 fs-3"></i>
                                     <span>Add Member</span>
                                 </a>
                             </div>
                             <div class="col-6 col-md-4">
-                                <a href=\"{% url 'members:list' %}\" class="btn btn-outline-light w-100 py-3 text-center d-flex flex-column align-items-center justify-content-center h-100">
+                                <a href="{% url 'members:list' %}" class="btn btn-outline-light w-100 py-3 text-center d-flex flex-column align-items-center justify-content-center h-100">
                                     <i class="bi bi-people mb-2 fs-3"></i>
                                     <span>View Members</span>
                                 </a>
                             </div>
                             <div class="col-6 col-md-4">
-                                <a href=\"{% url 'attendance:log_list' %}\" class="btn btn-outline-light w-100 py-3 text-center d-flex flex-column align-items-center justify-content-center h-100">
+                                <a href="{% url 'attendance:list' %}" class="btn btn-outline-light w-100 py-3 text-center d-flex flex-column align-items-center justify-content-center h-100">
                                     <i class="bi bi-calendar-check mb-2 fs-3"></i>
                                     <span>View Attendance</span>
                                 </a>
                             </div>
                             <div class="col-6 col-md-4">
-                                <a href=\"{% url 'invoices:invoice_list' %}\" class="btn btn-outline-light w-100 py-3 text-center d-flex flex-column align-items-center justify-content-center h-100">
+                                <a href="{% url 'invoices:invoice_list' %}" class="btn btn-outline-light w-100 py-3 text-center d-flex flex-column align-items-center justify-content-center h-100">
                                     <i class="bi bi-file-earmark-text mb-2 fs-3"></i>
                                     <span>Manage Invoices</span>
                                 </a>
                             </div>
                             <div class="col-6 col-md-4">
-                                <a href=\"{% url 'payments:payment_list' %}\" class="btn btn-outline-light w-100 py-3 text-center d-flex flex-column align-items-center justify-content-center h-100">
+                                <a href="{% url 'payments:payment_list' %}" class="btn btn-outline-light w-100 py-3 text-center d-flex flex-column align-items-center justify-content-center h-100">
                                     <i class="bi bi-credit-card mb-2 fs-3"></i>
                                     <span>View Payments</span>
                                 </a>
@@ -105,7 +105,7 @@
                 <section class="roster-section mt-1">
                     <div class="section-header">
                         <div>
-                            <p class=\"section-subtitle\">Roster Overview</p>
+                            <p class="section-subtitle">Roster Overview</p>
                             <h2>Members Record</h2>
                         </div>
                     </div>
@@ -163,10 +163,10 @@
             <section class="showcase-section">
                 <div class="section-header">
                     <div>
-                        <p class=\"section-subtitle\">Animated showcase</p>
+                        <p class="section-subtitle">Animated showcase</p>
                         <h2>Explore the training space in motion</h2>
                     </div>
-                    <p class=\"section-description\">Each card moves into view with refined motion, glassmorphism styling, and a premium layered presentation across desktop, tablet, and mobile.</p>
+                    <p class="section-description">Each card moves into view with refined motion, glassmorphism styling, and a premium layered presentation across desktop, tablet, and mobile.</p>
                 </div>
 
                 <div class="showcase-grid">
