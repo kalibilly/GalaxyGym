@@ -12,17 +12,23 @@
 <body class="d-flex flex-column min-vh-100 bg-dark text-white">
     {% include "partials/navbar.html" %}
 
-    <div class="container-fluid flex-grow-1 page-shell" style="margin-top: 56px;">
+    <div class="container-fluid flex-grow-1 page-shell">
+        {% block content %}
         <div class="row h-100">
             {% if user.is_authenticated %}
                 {% include "partials/sidebar.html" %}
+                <main class="col-md-9 col-lg-10 px-4 py-4">
+                    {% include "partials/messages.html" %}
+                    {% block authenticated_content %}{% endblock %}
+                </main>
+            {% else %}
+                <main class="col-12 px-4 py-4">
+                    {% include "partials/messages.html" %}
+                    {% block unauthenticated_content %}{% endblock %}
+                </main>
             {% endif %}
-
-            <main class="{% if user.is_authenticated %}col-md-9 col-lg-10{% else %}col-12{% endif %} px-4 py-4">
-                {% include "partials/messages.html" %}
-                {% block content %}{% endblock %}
-            </main>
         </div>
+        {% endblock %}
     </div>
 
     {% include "partials/footer.html" %}
