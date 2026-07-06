@@ -17,11 +17,9 @@
             {% if user.is_authenticated %}
                 {% include "partials/sidebar.html" %}
             {% endif %}
-            
+
             <main class="{% if user.is_authenticated %}col-md-9 col-lg-10{% else %}col-12{% endif %} px-4 py-4">
                 {% include "partials/messages.html" %}
-                
-                {# Single content block declaration eliminates syntax error #}
                 {% block content %}{% endblock %}
             </main>
         </div>
