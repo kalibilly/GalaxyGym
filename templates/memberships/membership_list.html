@@ -181,40 +181,40 @@
                     <ul class="pagination justify-content-center mb-0">
                         {% if page_obj.has_previous %}
                             <li class="page-item">
-                                <a class="page-link" href="?page=1{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.plan %}&plan={{ request.GET.plan }}{% endif %}{% if request.GET.page_size %}&page_size={{ request.GET.page_size }}{% endif %}">
+                                <a class="page-link bg-dark text-white" href="?page=1{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.plan %}&plan={{ request.GET.plan }}{% endif %}{% if request.GET.page_size %}&page_size={{ request.GET.page_size }}{% endif %}">
                                     First
                                 </a>
                             </li>
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.plan %}&plan={{ request.GET.plan }}{% endif %}{% if request.GET.page_size %}&page_size={{ request.GET.page_size }}{% endif %}">
+                                <a class="page-link bg-dark text-white" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.plan %}&plan={{ request.GET.plan }}{% endif %}{% if request.GET.page_size %}&page_size={{ request.GET.page_size }}{% endif %}">
                                     Previous
                                 </a>
                             </li>
                         {% else %}
-                            <li class="page-item disabled"><span class="page-link">First</span></li>
-                            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                            <li class="page-item disabled"><span class="page-link bg-dark text-white">First</span></li>
+                            <li class="page-item disabled"><span class="page-link bg-dark text-white">Previous</span></li>
                         {% endif %}
 
                         <li class="page-item disabled">
-                            <span class="page-link">
+                            <span class="page-link bg-dark text-white">
                                 Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
                             </span>
                         </li>
 
                         {% if page_obj.has_next %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.plan %}&plan={{ request.GET.plan }}{% endif %}{% if request.GET.page_size %}&page_size={{ request.GET.page_size }}{% endif %}">
+                                <a class="page-link bg-dark text-white" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.plan %}&plan={{ request.GET.plan }}{% endif %}{% if request.GET.page_size %}&page_size={{ request.GET.page_size }}{% endif %}">
                                     Next
                                 </a>
                             </li>
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.plan %}&plan={{ request.GET.plan }}{% endif %}{% if request.GET.page_size %}&page_size={{ request.GET.page_size }}{% endif %}">
+                                <a class="page-link bg-dark text-white" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.plan %}&plan={{ request.GET.plan }}{% endif %}{% if request.GET.page_size %}&page_size={{ request.GET.page_size }}{% endif %}">
                                     Last
                                 </a>
                             </li>
                         {% else %}
-                            <li class="page-item disabled"><span class="page-link">Next</span></li>
-                            <li class="page-item disabled"><span class="page-link">Last</span></li>
+                            <li class="page-item disabled"><span class="page-link bg-dark text-white">Next</span></li>
+                            <li class="page-item disabled"><span class="page-link bg-dark text-white">Last</span></li>
                         {% endif %}
                     </ul>
                 </nav>
