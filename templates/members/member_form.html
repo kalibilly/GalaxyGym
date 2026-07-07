@@ -2,13 +2,53 @@
 
 {% block title %}{% if form.instance.pk %}Edit Member{% else %}Add Member{% endif %} - Galaxy Gym{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Styling for the interactive clickable image preview area */
+    .image-preview-wrapper {
+        position: relative;
+        cursor: pointer;
+        display: inline-block;
+        max-width: 150px;
+        border: 2px dashed #495057;
+        border-radius: 8px;
+        padding: 4px;
+        transition: border-color 0.2s ease-in-out;
+    }
+    .image-preview-wrapper:hover {
+        border-color: #0d6efd;
+    }
+    .img-preview-thumb {
+        width: 100%;
+        height: auto;
+        border-radius: 6px;
+        object-fit: cover;
+        aspect-ratio: 1 / 1;
+        background-color: #212529;
+    }
+    .preview-overlay-text {
+        position: absolute;
+        bottom: 4px;
+        left: 4px;
+        right: 4px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        font-size: 0.75rem;
+        text-align: center;
+        padding: 2px 0;
+        border-bottom-left-radius: 6px;
+        border-bottom-right-radius: 6px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-lg-8">
         <div class="card shadow-sm">
             <div class="card-body">
                 <h1 class="h4 mb-3">{% if form.instance.pk %}Edit Member{% else %}Add Member{% endif %}</h1>
-                <form method="post" enctype="multipart/form-data" novalidate>
+                <form method="post" enctype="multipart/form-data" novalidate id="memberForm">
                     {% csrf_token %}
                     {{ form.non_field_errors }}
                     <div class="row g-3">
@@ -17,6 +57,17 @@
                                 <div class="mb-3">
                                     <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} *{% endif %}</label>
                                     {{ field }}
+                                    
+                                    {# Container to inject dynamic image previews safely right under the upload input #}
+                                    {% if 'photo' in field.name or 'image' in field.name %}
+                                        <div class="mt-2 d-none" id="previewContainer-{{ field.id_for_label }}">
+                                            <div class="image-preview-wrapper" data-bs-toggle="modal" data-bs-target="#imagePreviewModal">
+                                                <img id="imageElement-{{ field.id_for_label }}" src="#" alt="Preview" class="img-preview-thumb">
+                                                <div class="preview-overlay-text">Click to View</div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+
                                     {% if field.help_text %}
                                         <div class="form-text">{{ field.help_text }}</div>
                                     {% endif %}
@@ -36,4 +87,85 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-labelledby="imagePreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="imagePreviewModalLabel">Verify Attached Member Image</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center p-3">
+                <img id="modalLargeImage" src="#" alt="Full Preview" class="img-fluid rounded shadow-sm" style="max-height: 70vh;">
+            </div>
+            <div class="modal-footer border-secondary justify-content-between">
+                <p class="small text-muted mb-0">If blurry or incorrect, choose or snap another image to update.</p>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Find all file inputs (device pickers) inside the form
+        const fileInputs = document.querySelectorAll('input[type="file"]');
+        const modalImage = document.getElementById('modalLargeImage');
+
+        fileInputs.forEach(input => {
+            const containerId = 'previewContainer-' + input.id;
+            const imgId = 'imageElement-' + input.id;
+            
+            const container = document.getElementById(containerId);
+            const previewImg = document.getElementById(imgId);
+
+            if (container && previewImg) {
+                // Event handler to watch updates from device choice or local stream capture targets
+                input.addEventListener('change', function() {
+                    const file = this.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            previewImg.src = e.target.result;
+                            container.classList.remove('d-none');
+                            
+                            // Synchronize click target data for the larger modal view
+                            container.querySelector('.image-preview-wrapper').onclick = function() {
+                                modalImage.src = e.target.result;
+                            };
+                        }
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+        });
+
+        // Optional Camera integration bridge: If your web-app camera sets a DataURL back to an input/file mock, 
+        // this MutationObserver automatically tracks it to ensure instantaneous preview updates seamlessly.
+        const form = document.getElementById('memberForm');
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
+                    const target = mutation.target;
+                    if (target.tagName === 'INPUT' && (target.name.includes('photo') || target.name.includes('image'))) {
+                        const container = document.getElementById('previewContainer-' + target.id);
+                        const previewImg = document.getElementById('imageElement-' + target.id);
+                        if (container && previewImg && target.value.startsWith('data:image')) {
+                            previewImg.src = target.value;
+                            container.classList.remove('d-none');
+                            container.querySelector('.image-preview-wrapper').onclick = function() {
+                                modalImage.src = target.value;
+                            };
+                        }
+                    }
+                }
+            });
+        });
+
+        const config = { attributes: true, subtree: true, attributeFilter: ['value'] };
+        observer.observe(form, config);
+    });
+</script>
 {% endblock %}
