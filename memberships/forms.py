@@ -11,7 +11,9 @@ class MembershipPlanSelect(forms.Select):
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
         if value:
-            plan = MembershipPlan.objects.filter(pk=value).first()
+            # Extract the actual database primitive value if wrapped inside a ModelChoiceIteratorValue
+            actual_value = getattr(value, 'value', value)
+            plan = MembershipPlan.objects.filter(pk=actual_value).first()
             if plan:
                 option['attrs']['data-price'] = str(plan.price)
         return option
