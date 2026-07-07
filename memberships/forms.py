@@ -11,7 +11,6 @@ class MembershipPlanSelect(forms.Select):
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
         if value:
-            # Extract the actual database primitive value if wrapped inside a ModelChoiceIteratorValue
             actual_value = getattr(value, 'value', value)
             plan = MembershipPlan.objects.filter(pk=actual_value).first()
             if plan:
@@ -52,6 +51,7 @@ class MembershipForm(forms.ModelForm):
             'price_before_discount',
             'discount_amount',
             'total_amount',
+            'paid_amount',
             'payment_status',
             'remarks',
         ]
@@ -63,6 +63,7 @@ class MembershipForm(forms.ModelForm):
             'price_before_discount': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'readonly': 'readonly'}),
             'discount_amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
             'total_amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'readonly': 'readonly'}),
+            'paid_amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'placeholder': '0.00'}),
         }
         labels = {
             'entry_number': 'Entry Number',
@@ -73,6 +74,7 @@ class MembershipForm(forms.ModelForm):
             'price_before_discount': 'Price Before Discount',
             'discount_amount': 'Discount Amount',
             'total_amount': 'Total Amount',
+            'paid_amount': 'Paid Amount',
             'payment_status': 'Payment Status',
             'remarks': 'Remarks',
         }
@@ -88,6 +90,7 @@ class MembershipForm(forms.ModelForm):
         self.fields['price_before_discount'].required = True
         self.fields['discount_amount'].required = True
         self.fields['total_amount'].required = True
+        self.fields['paid_amount'].required = True
         self.fields['payment_status'].required = True
         self.fields['remarks'].required = False
         self.fields['member_lookup'].required = False
@@ -105,6 +108,8 @@ class MembershipForm(forms.ModelForm):
         cleaned_data = super().clean()
         price_before_discount = cleaned_data.get('price_before_discount')
         discount_amount = cleaned_data.get('discount_amount')
+        total_amount = cleaned_data.get('total_amount')
+        paid_amount = cleaned_data.get('paid_amount')
 
         if price_before_discount is not None and price_before_discount < 0:
             self.add_error('price_before_discount', 'Price before discount cannot be negative.')
@@ -112,12 +117,22 @@ class MembershipForm(forms.ModelForm):
             self.add_error('discount_amount', 'Discount cannot be negative.')
         if price_before_discount is not None and discount_amount is not None and discount_amount > price_before_discount:
             self.add_error('discount_amount', 'Discount cannot be greater than the base price.')
+        
+        # Calculate calculated total amount for validation safety
+        base_price = price_before_discount or Decimal('0.00')
+        disc = discount_amount or Decimal('0.00')
+        calc_total = base_price - disc
+
+        if paid_amount is not None and paid_amount < 0:
+            self.add_error('paid_amount', 'Paid amount cannot be negative.')
+        if paid_amount is not None and paid_amount > calc_total:
+            self.add_error('paid_amount', 'Paid amount cannot be greater than the Total Amount.')
 
         return cleaned_data
 
     def save(self, commit=True):
         instance = super().save(commit=False)
-        if instance.plan_id and instance.price_before_discount == 0:
+        if instance.plan_id and (instance.price_before_discount == 0 or instance.price_before_discount is None):
             instance.price_before_discount = instance.plan.price
         if instance.discount_amount is None:
             instance.discount_amount = 0
