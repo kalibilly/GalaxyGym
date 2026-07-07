@@ -18,7 +18,7 @@
             name="q"
             value="{{ q }}"
             class="form-control"
-            placeholder="Search member ID, name, phone, or vehicle..."
+            placeholder="Search member ID, name, phone, or vehicle...
         >
     </div>
     <div class="col-sm-3">
@@ -31,144 +31,119 @@
     </div>
     <div class="col-sm-3">
         <select name="staff" class="form-select">
-            <option value="">Assigned Staff</option>
-            {% for staff in staff_members %}
-                <option value="{{ staff.id }}" {% if staff.id|stringformat:'s' == staff_id %}selected{% endif %}>
-                    {{ staff.full_name }}
+            <option value="">All Staff Instructors</option>
+            {% for s in staff_list %}
+                <option value="{{ s.pk }}" {% if staff_id == s.pk|stringformat:"i" %}selected{% endif %}>
+                    {{ s.full_name }}
                 </option>
             {% endfor %}
         </select>
     </div>
-    <div class="col-sm-2 d-grid">
-        <button class="btn btn-secondary" type="submit">Filter</button>
+    <div class="col-sm-2">
+        <button type="submit" class="btn btn-secondary w-100">Filter</button>
     </div>
 </form>
 
-<div class="card card-dark mb-4">
-    <div class="card-header bg-dark">
-        <h5 class="mb-0 text-white">Master Directory</h5>
-    </div>
+<div class="card shadow-sm border-secondary bg-dark text-white">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-dark table-hover align-middle mb-0" style="font-size: 0.9rem;">
+            <table class="table table-dark table-hover align-middle mb-0 text-nowrap">
                 <thead>
                     <tr>
-                        <th>S.No.</th>
-                        <th>Name / IDs</th>
-                        <th>Entry No.</th>
-                        <th>Phone</th>
-                        <th>Plan</th>
-                        <th>Joining Date</th>
-                        <th>Start Date</th>
-                        <th>End Date</th>
-                        <th>Memb. Amount</th>
-                        <th>Paid Amount</th>
-                        <th>Remarks</th>
-                        <th>Vehicle Type</th>
-                        <th>Vehicle No.</th>
-                        <th>Status</th>
-                        <th>Photo</th>
-                        <th class="text-end">Actions</th>
+                        <th scope="col" class="ps-3">Photo</th>
+                        <th scope="col">Member ID</th>
+                        <th scope="col">Full Name</th>
+                        <th scope="col">Entry no.</th>
+                        <th scope="col">Start Date</th>
+                        <th scope="col">End Date</th>
+                        <th scope="col">Membership Amount</th>
+                        <th scope="col">Paid Amount</th>
+                        <th scope="col">Remarks</th>
+                        <th scope="col" class="text-end pe-3">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for member in member_list %}
+                        {% with current_m=member.memberships.all.first %}
                         <tr>
-                            <td>{{ forloop.counter|add:page_obj.start_index|add:"-1" }}</td>
-                            <td>
-                                <strong class="text-white d-block">{{ member.full_name }}</strong>
-                                <span class="text-muted d-block" style="font-size: 0.8rem;">ID: {{ member.member_id }}</span>
-                                <span class="text-info d-block" style="font-size: 0.8rem;">Device ID: {{ member.device_user_id|default:"—" }}</span>
-                            </td>
-                            <td><span class="badge bg-secondary font-monospace">{{ member.member_id }}</span></td>
-                            <td>{{ member.phone_number }}</td>
-                            
-                            <td>
-                                {% if member.active_membership %}
-                                    <span class="text-info font-weight-bold">{{ member.active_membership.plan.name }}</span>
-                                {% else %}
-                                    <span class="text-muted">—</span>
-                                {% endif %}
-                            </td>
-                            
-                            <td>{{ member.date_of_joining|date:"Y-m-d" }}</td>
-                            
-                            <td>{{ member.active_membership.start_date|date:"Y-m-d"|default:"—" }}</td>
-                            <td>{{ member.active_membership.end_date|date:"Y-m-d"|default:"—" }}</td>
-                            <td>
-                                {% if member.active_membership %}
-                                    ₹{{ member.active_membership.total_amount|default:member.active_membership.final_amount }}
-                                {% else %}
-                                    —
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if member.active_membership %}
-                                    ₹{{ member.active_membership.paid_amount|default:"0.00" }}
-                                {% else %}
-                                    —
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="text-wrap d-inline-block" style="max-width: 120px;">
-                                    {{ member.active_membership.remarks|default:member.notes|default:"—" }}
-                                </span>
-                            </td>
-
-                            <td>
-                                {% if member.vehicle_number_permanent %}
-                                    <span class="badge bg-primary">Permanent</span>
-                                {% elif member.vehicle_number_temporary %}
-                                    <span class="badge bg-warning text-dark">Temporary</span>
-                                {% else %}
-                                    <span class="text-muted">None</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <code class="text-light">
-                                    {{ member.vehicle_number_permanent|default:member.vehicle_number_temporary|default:"—" }}
-                                </code>
-                            </td>
-
-                            <td>
-                                {% if member.status == 'active' %}
-                                    <span class="badge bg-success">{{ member.get_status_display }}</span>
-                                {% elif member.status == 'inactive' %}
-                                    <span class="badge bg-secondary">{{ member.get_status_display }}</span>
-                                {% else %}
-                                    <span class="badge bg-warning text-dark">{{ member.get_status_display }}</span>
-                                {% endif %}
-                            </td>
-                            <td>
+                            <td class="ps-3">
                                 {% if member.photo %}
-                                    <img src="{{ member.photo.url }}" alt="{{ member.full_name }}" class="img-thumbnail rounded" data-bs-toggle="modal" data-bs-target="#photoModal{{ member.pk }}" style="max-height: 40px; max-width: 40px; cursor: pointer;">
+                                    <img
+                                        src="{{ member.photo.url }}"
+                                        alt="{{ member.full_name }}"
+                                        class="rounded-circle object-fit-cover"
+                                        width="40"
+                                        height="40"
+                                    >
                                 {% else %}
-                                    <span class="text-muted">No photo</span>
+                                    <div
+                                        class="bg-secondary rounded-circle d-flex align-items-center justify-content-center text-white"
+                                        style="width: 40px; height: 40px; font-size: 0.85rem;"
+                                    >
+                                        N/A
+                                    </div>
                                 {% endif %}
                             </td>
-                            
-                            <td class="text-end">
-                                <div class="d-flex gap-1 justify-content-end">
-                                    <a href="{% url 'members:update' member.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2">Edit</a>
-                                    <a href="{% url 'members:detail' member.pk %}" class="btn btn-sm btn-outline-secondary py-0 px-2">View</a>
+                            <td><span class="font-monospace text-info">{{ member.member_id }}</span></td>
+                            <td>
+                                <div class="fw-semibold">{{ member.full_name }}</div>
+                                <small class="text-muted">{{ member.phone_number }}</small>
+                            </td>
+                            <td>
+                                {% if current_m and current_m.entry_number %}
+                                    <span class="badge bg-secondary">{{ current_m.entry_number }}</span>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if current_m %}
+                                    {{ current_m.start_date|date:"Y-m-d" }}
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if current_m %}
+                                    {{ current_m.end_date|date:"Y-m-d" }}
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if current_m %}
+                                    ₹{{ current_m.total_amount }}
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if current_m %}
+                                    <span class="text-success fw-bold">₹{{ current_m.paid_amount }}</span>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if current_m and current_m.remarks %}
+                                    <span class="d-inline-block text-truncate" style="max-width: 150px;" title="{{ current_m.remarks }}">
+                                        {{ current_m.remarks }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end pe-3">
+                                <div class="btn-group font-monospace">
+                                    <a href="{% url 'members:detail' member.pk %}" class="btn btn-sm btn-outline-light">View</a>
+                                    <a href="{% url 'members:update' member.pk %}" class="btn btn-sm btn-outline-warning">Edit</a>
                                 </div>
                             </td>
                         </tr>
-
-                        {% if member.photo %}
-                            <div class="modal fade" id="photoModal{{ member.pk }}" tabindex="-1" aria-hidden="true">
-                                <div class="modal-dialog modal-dialog-centered">
-                                    <div class="modal-content bg-dark border-light">
-                                        <div class="modal-body text-center p-2">
-                                            <img src="{{ member.photo.url }}" alt="{{ member.full_name }}" class="img-fluid rounded">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        {% endif %}
+                        {% endwith %}
                     {% empty %}
                         <tr>
-                            <td colspan="16" class="text-center text-muted py-4">No records match the active search filters.</td>
+                            <td colspan="10" class="text-center text-muted py-4">No records match the active search filters.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
