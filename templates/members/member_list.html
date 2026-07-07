@@ -221,22 +221,22 @@
     <ul class="pagination justify-content-center">
         {% if page_obj.has_previous %}
             <li class="page-item">
-                <a class="page-link shadow-none" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if staff_id %}staff={{ staff_id }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+                <a class="page-link bg-dark text-white border-secondary shadow-none" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if staff_id %}staff={{ staff_id }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
             </li>
         {% else %}
-            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+            <li class="page-item "><span class="page-link bg-secondary text-white border-secondary">Previous</span></li>
         {% endif %}
 
         <li class="page-item disabled">
-            <span class="page-link text-white">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            <span class="page-link bg-dark text-white border-secondary fw-semibold">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
         </li>
 
         {% if page_obj.has_next %}
             <li class="page-item">
-                <a class="page-link shadow-none" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if staff_id %}staff={{ staff_id }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+                <a class="page-link bg-dark text-white border-secondary shadow-none" href="?{% if q %}q={{ q }}&{% endif %}{% if status %}status={{ status }}&{% endif %}{% if staff_id %}staff={{ staff_id }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
             </li>
         {% else %}
-            <li class="page-item disabled"><span class="page-link">Next</span></li>
+            <li class="page-item disabled"><span class="page-link bg-secondary text-white border-secondary">Next</span></li>
         {% endif %}
     </ul>
 </nav>
