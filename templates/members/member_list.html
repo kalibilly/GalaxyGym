@@ -18,7 +18,7 @@
             name="q"
             value="{{ q }}"
             class="form-control"
-            placeholder="Search member ID, name, phone, or vehicle...
+            placeholder="Search member ID, name, phone, or vehicle..."
         >
     </div>
     <div class="col-sm-3">
@@ -90,8 +90,8 @@
                                 <small class="text-muted">{{ member.phone_number }}</small>
                             </td>
                             <td>
-                                {% if current_m and current_m.entry_number %}
-                                    <span class="badge bg-secondary">{{ current_m.entry_number }}</span>
+                                {% if current_m and current_m.serial_number %}
+                                    <span class="badge bg-secondary">{{ current_m.serial_number }}</span>
                                 {% else %}
                                     <span class="text-muted small">-</span>
                                 {% endif %}
