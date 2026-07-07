@@ -43,211 +43,93 @@ class MembershipPlan(TimeStampedModel, ActiveStatusModel):
 
     @property
     def level(self):
-        return self.DURATION_LEVELS.get(self.duration_months, 0)
+        months = self.duration_months
+        return self.DURATION_LEVELS.get(months, 1)
 
     @property
     def cardio_label(self):
-        return self.CARDIO_LABELS[self.cardio_included]
+        return self.CARDIO_LABELS.get(self.cardio_included, 'Without Cardio')
 
     @property
     def allow_partial_payment(self):
-        return self.duration_months != 1
-
-    @property
-    def payment_rule_label(self):
-        return 'Full payment only' if not self.allow_partial_payment else 'Partial payment allowed'
-
-    @classmethod
-    def default_plan_name(cls, duration_days, cardio_included):
-        duration_months = duration_days // 30
-        variant = 'With Cardio' if cardio_included else 'Without Cardio'
-        return f'{duration_months} month{"s" if duration_months != 1 else ""} {variant}'
-
-    @classmethod
-    def get_default_plans(cls):
-        return [
-            {'duration_days': 30, 'cardio_included': False, 'price': Decimal('800'), 'description': '1 month membership without cardio.'},
-            {'duration_days': 30, 'cardio_included': True, 'price': Decimal('1000'), 'description': '1 month membership with cardio.'},
-            {'duration_days': 90, 'cardio_included': False, 'price': Decimal('2400'), 'description': '3 month membership without cardio.'},
-            {'duration_days': 90, 'cardio_included': True, 'price': Decimal('3000'), 'description': '3 month membership with cardio.'},
-            {'duration_days': 180, 'cardio_included': False, 'price': Decimal('4800'), 'description': '6 month membership without cardio.'},
-            {'duration_days': 180, 'cardio_included': True, 'price': Decimal('6000'), 'description': '6 month membership with cardio.'},
-            {'duration_days': 360, 'cardio_included': False, 'price': Decimal('9600'), 'description': '12 month membership without cardio.'},
-            {'duration_days': 360, 'cardio_included': True, 'price': Decimal('12000'), 'description': '12 month membership with cardio.'},
-        ]
-
-    @classmethod
-    def sync_default_plans(cls):
-        for plan_data in cls.get_default_plans():
-            name = cls.default_plan_name(plan_data['duration_days'], plan_data['cardio_included'])
-            defaults = {
-                'name': name,
-                'price': plan_data['price'],
-                'description': plan_data.get('description', ''),
-                'is_active': True,
-            }
-            plan, created = cls.objects.update_or_create(
-                duration_days=plan_data['duration_days'],
-                cardio_included=plan_data['cardio_included'],
-                defaults=defaults,
-            )
-            if not created and (plan.name != name or plan.price != plan_data['price'] or plan.is_active is not True):
-                plan.name = name
-                plan.price = plan_data['price']
-                plan.is_active = True
-                plan.description = plan_data.get('description', '')
-                plan.save()
-
-    def clean(self):
-        if self.duration_days not in self.ALLOWED_DURATION_DAYS:
-            raise ValidationError({'duration_days': 'Duration must be 30, 90, 180, or 360 days.'})
-
-    def save(self, *args, **kwargs):
-        if not self.name:
-            self.name = self.default_plan_name(self.duration_days, self.cardio_included)
-        self.clean()
-        super().save(*args, **kwargs)
+        return self.duration_days >= 90
 
 
 class Membership(TimeStampedModel):
-    PAYMENT_STATUS_UNPAID = 'unpaid'
-    PAYMENT_STATUS_PARTIAL = 'partial'
-    PAYMENT_STATUS_PAID = 'paid'
-
-    PAYMENT_STATUS_CHOICES = [
-        (PAYMENT_STATUS_UNPAID, 'Unpaid'),
-        (PAYMENT_STATUS_PARTIAL, 'Partial'),
-        (PAYMENT_STATUS_PAID, 'Paid'),
-    ]
-
     STATUS_ACTIVE = 'active'
     STATUS_EXPIRING_SOON = 'expiring_soon'
     STATUS_EXPIRED = 'expired'
-    STATUS_FROZEN = 'frozen'
     STATUS_CANCELLED = 'cancelled'
 
     STATUS_CHOICES = [
         (STATUS_ACTIVE, 'Active'),
         (STATUS_EXPIRING_SOON, 'Expiring Soon'),
         (STATUS_EXPIRED, 'Expired'),
-        (STATUS_FROZEN, 'Frozen'),
         (STATUS_CANCELLED, 'Cancelled'),
     ]
 
-    serial_number = models.CharField(max_length=32, unique=True, null=True, blank=True)
-    entry_number = models.CharField(max_length=32, unique=True, null=True, blank=True)
-    member = models.ForeignKey(
-        'members.Member',
-        on_delete=models.CASCADE,
-        related_name='memberships',
-    )
-    plan = models.ForeignKey(
-        MembershipPlan,
-        on_delete=models.PROTECT,
-        related_name='memberships',
-    )
+    PAYMENT_STATUS_PAID = 'paid'
+    PAYMENT_STATUS_PARTIAL = 'partial'
+    PAYMENT_STATUS_UNPAID = 'unpaid'
+
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_STATUS_PAID, 'Fully Paid'),
+        (PAYMENT_STATUS_PARTIAL, 'Partially Paid'),
+        (PAYMENT_STATUS_UNPAID, 'Unpaid'),
+    ]
+
+    entry_number = models.CharField(max_length=50, blank=True, null=True)
+    member = models.ForeignKey('members.Member', on_delete=models.CASCADE, related_name='memberships')
+    plan = models.ForeignKey(MembershipPlan, on_delete=models.PROTECT, related_name='memberships')
     start_date = models.DateField()
     end_date = models.DateField()
-    price_before_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    payment_status = models.CharField(
-        max_length=20,
-        choices=PAYMENT_STATUS_CHOICES,
-        default=PAYMENT_STATUS_UNPAID,
-    )
+    price_before_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default=PAYMENT_STATUS_UNPAID)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
-    renewed_from = models.ForeignKey(
-        'self',
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='renewals',
-    )
     remarks = models.TextField(blank=True)
 
     class Meta:
-        ordering = ['-start_date', 'member']
-        verbose_name = 'Membership'
-        verbose_name_plural = 'Memberships'
+        ordering = ['-start_date', '-created_at']
+        verbose_name = 'Membership Fee Record'
+        verbose_name_plural = 'Membership Fee Records'
 
     def __str__(self):
-        serial = self.serial_number or 'Membership'
-        return f'{serial} — {self.member} — {self.plan}'
-
-    @classmethod
-    def get_next_serial_number(cls):
-        prefix = 'MBR-'
-        latest = cls.objects.exclude(serial_number__isnull=True).exclude(serial_number='').order_by('-id').first()
-        if not latest or not latest.serial_number:
-            return f'{prefix}0001'
-
-        match = re.search(r'(\d+)$', latest.serial_number)
-        if not match:
-            return f'{prefix}0001'
-
-        next_number = int(match.group(1)) + 1
-        return f'{prefix}{next_number:04d}'
-
-    @property
-    def membership_amount(self):
-        return self.price_before_discount
-
-    @property
-    def final_amount(self):
-        return self.total_amount
+        return f"{self.member.full_name} - {self.plan.name} ({self.start_date} to {self.end_date})"
 
     def clean(self):
-        if self.end_date < self.start_date:
-            raise ValidationError('End date must be on or after start date.')
-        if self.price_before_discount < 0:
-            raise ValidationError({'price_before_discount': 'Price before discount cannot be negative.'})
-        if self.discount_amount < 0:
-            raise ValidationError({'discount_amount': 'Discount cannot be negative.'})
-        if self.discount_amount > self.price_before_discount:
-            raise ValidationError({'discount_amount': 'Discount cannot be greater than the base price.'})
-
-    def derive_status(self):
-        if self.status in {self.STATUS_FROZEN, self.STATUS_CANCELLED}:
-            return self.status
-
-        today = date.today()
-        if self.end_date < today:
-            return self.STATUS_EXPIRED
-
-        if self.end_date - today <= timedelta(days=7):
-            return self.STATUS_EXPIRING_SOON
-
-        return self.STATUS_ACTIVE
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValidationError('The membership start date cannot be after the end date.')
 
     def save(self, *args, **kwargs):
-        if not self.serial_number:
-            self.serial_number = self.get_next_serial_number()
-        if not self.entry_number:
-            self.entry_number = self.serial_number
+        self.full_clean()
+        
+        if self.price_before_discount == 0 and self.plan:
+            self.price_before_discount = self.plan.price
+        
         self.total_amount = self.price_before_discount - self.discount_amount
-        old_status = None
-        if self.pk:
-            try:
-                old = Membership.objects.filter(pk=self.pk).first()
-                if old:
-                    old_status = old.status
-            except Exception:
-                old_status = None
+        
+        # Keep internal auto-calculated helper values in sync
+        today = date.today()
+        if self.status != self.STATUS_CANCELLED:
+            if today > self.end_date:
+                self.status = self.STATUS_EXPIRED
+            elif today >= (self.end_date - timedelta(days=7)):
+                self.status = self.STATUS_EXPIRING_SOON
+            else:
+                self.status = self.STATUS_ACTIVE
 
-        self.status = self.derive_status()
         super().save(*args, **kwargs)
-
-        # If membership just expired, push expiry to biometric devices
+        
         try:
-            if self.status == self.STATUS_EXPIRED and old_status != self.STATUS_EXPIRED:
+            if hasattr(self.member, 'sync_biometric_status_and_push'):
+                self.member.sync_biometric_status_and_push()
+            else:
                 from attendance.models import BiometricDevice
                 from attendance.biometric import BiometricSyncService
-
-                devices = BiometricDevice.objects.filter(
-                    device_type=BiometricDevice.DeviceType.AIFACE,
-                    is_active=True,
-                )
+                devices = BiometricDevice.objects.filter(device_type=BiometricDevice.DeviceType.AIFACE, is_active=True)
                 member = self.member
                 for device in devices:
                     try:
@@ -284,6 +166,9 @@ class Membership(TimeStampedModel):
             self.STATUS_ACTIVE: 'success',
             self.STATUS_EXPIRING_SOON: 'warning',
             self.STATUS_EXPIRED: 'danger',
-            self.STATUS_FROZEN: 'secondary',
-            self.STATUS_CANCELLED: 'dark',
-        }.get(self.status, 'secondary')
+            self.STATUS_CANCELLED: 'secondary',
+        }.get(self.status, 'info')
+
+    @property
+    def balance_amount(self):
+        return max(Decimal('0.00'), self.total_amount - self.paid_amount)
