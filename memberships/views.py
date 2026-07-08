@@ -66,7 +66,6 @@ class MembershipListView(LoginRequiredMixin, ListView):
     paginate_by = 12
 
     def get_queryset(self):
-        # FIXED: Removed 'renewed_from' from select_related to resolve the FieldError
         queryset = super().get_queryset().select_related('member', 'plan').order_by('-start_date')
         query = self.request.GET.get('q')
         status = self.request.GET.get('status')
@@ -135,7 +134,7 @@ class MembershipCreateView(LoginRequiredMixin, CreateView):
             source_membership = Membership.objects.filter(pk=renewed_from).first()
             if source_membership:
                 form.instance.renewed_from = source_membership
-        form.instance.serial_number = form.instance.serial_number or Membership.get_next_serial_number()
+        # FIXED: Removed the invalid .serial_number assignment line to avoid runtime AttributeError crashes.
         return super().form_valid(form)
 
 
