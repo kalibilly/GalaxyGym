@@ -56,7 +56,7 @@ class MembershipForm(forms.ModelForm):
             'remarks',
         ]
         widgets = {
-            'entry_number': forms.TextInput(attrs={'placeholder': 'Invoice / entry number'}),
+            'entry_number': forms.TextInput(attrs={'placeholder': 'Auto-generated if left blank'}),
             'start_date': forms.DateInput(attrs={'type': 'date'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
             'remarks': forms.Textarea(attrs={'rows': 3}),
@@ -66,7 +66,7 @@ class MembershipForm(forms.ModelForm):
             'paid_amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'placeholder': '0.00'}),
         }
         labels = {
-            'entry_number': 'Entry Number',
+            'entry_number': 'Entry Number / S.No',
             'member': 'Member',
             'plan': 'Membership Plan',
             'start_date': 'Start Date',
@@ -82,7 +82,10 @@ class MembershipForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['plan'].widget = MembershipPlanSelect(choices=self.fields['plan'].choices)
-        self.fields['entry_number'].required = True
+        
+        # CHANGED: Changed entry_number to False so it can be automatically generated if left empty
+        self.fields['entry_number'].required = False
+        
         self.fields['member'].required = True
         self.fields['plan'].required = True
         self.fields['start_date'].required = True
@@ -137,6 +140,15 @@ class MembershipForm(forms.ModelForm):
         if instance.discount_amount is None:
             instance.discount_amount = 0
         instance.total_amount = instance.price_before_discount - instance.discount_amount
+        
+        # CHANGED: Auto-generate entry_number sequentially if left blank by user
+        if not instance.entry_number:
+            last_membership = Membership.objects.order_by('-id').first()
+            if last_membership and last_membership.entry_number and last_membership.entry_number.isdigit():
+                instance.entry_number = str(int(last_membership.entry_number) + 1)
+            else:
+                instance.entry_number = "1001" # Starting baseline serial format
+                
         if commit:
             instance.save()
         return instance
