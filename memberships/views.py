@@ -66,11 +66,11 @@ class MembershipListView(LoginRequiredMixin, ListView):
     paginate_by = 12
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related('member', 'plan', 'renewed_from').order_by('-start_date')
+        # FIXED: Removed 'renewed_from' from select_related to resolve the FieldError
+        queryset = super().get_queryset().select_related('member', 'plan').order_by('-start_date')
         query = self.request.GET.get('q')
         status = self.request.GET.get('status')
         if query:
-            # FIXED: Changed serial_number__icontains to entry_number__icontains to match the actual model field name
             queryset = queryset.filter(
                 Q(entry_number__icontains=query)
                 | Q(member__member_id__icontains=query)
