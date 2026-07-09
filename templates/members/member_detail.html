@@ -48,13 +48,13 @@
                         </form>
                     {% endif %} {% endcomment %}
 
-                    {% if front_device or back_device %}
+                    {% comment %} {% if front_device or back_device %}
                         <form method="post" action="{% url 'members:send_to_both_devices' member.pk %}" class="d-inline">
                             {% csrf_token %}
                             <input type="hidden" name="next" value="{% url 'members:detail' member.pk %}">
                             <button type="submit" class="btn btn-dark">Send to Device</button>
                         </form>
-                    {% endif %}
+                    {% endif %} {% endcomment %}
                 </div>
             </div>
         </div>
@@ -274,7 +274,7 @@
                     <p class="mb-2">Status: <strong>{{ active_membership.get_status_display }}</strong></p>
                     <p class="mb-2">Valid: {{ active_membership.start_date|date:"M d, Y" }} — {{ active_membership.end_date|date:"M d, Y" }}</p>
                 {% else %}
-                    <p class="text-white-50">No active membership found.</p>
+                    <p class="bg-dark text-white">No active membership found.</p>
                 {% endif %}
 
                 {% if recent_memberships %}
