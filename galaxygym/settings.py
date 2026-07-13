@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Production flag - set PRODUCTION=True or ENVIRONMENT=production in .env
 IS_PRODUCTION = config('PRODUCTION', default=False, cast=bool) or config('ENVIRONMENT', default='development').lower() == 'production'
 
-SECRET_KEY = os.environ.get('SECRET_KEY') or config('SECRET_KEY', default='django-insecure-change-me-in-development')
+SECRET_KEY = os.environ.get('SECRET_KEY') or config('SECRET_KEY', default='your-default-secret-key')
 if IS_PRODUCTION and not SECRET_KEY:
     raise Exception("SECRET_KEY is missing. Set it in environment variables.")
 
@@ -18,6 +18,10 @@ DEBUG = False
 
 ALLOWED_HOSTS = [
     'galaxygym.onrender.com',
+    'http://127.0.0.1:8000',
+    'localhost',
+    '127.0.0.1',
+    '*',
 ]
 
 INSTALLED_APPS = [
@@ -229,3 +233,5 @@ CACHES = {
         'TIMEOUT': 300,
     }
 }
+
+EBIOSERVER_URL = os.environ.get('EBIOSERVER_URL', 'http://127.0.1:85')  # Default to localhost if not set
